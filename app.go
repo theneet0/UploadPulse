@@ -3,9 +3,16 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"net/url"
+	"strings"
 	"sync"
+	"time"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
+	xproxy "golang.org/x/net/proxy"
 
 	"github.com/uploadpulse/uploadpulse/internal/export"
 	"github.com/uploadpulse/uploadpulse/internal/history"
@@ -303,3 +310,138 @@ func (a *App) CancelTest() error {
 func (a *App) GetLocale(lang string) localization.LocaleData {
 	return localization.GetLocale(lang)
 }
+
+// ProxyTestResult contains the outcome of testing a SOCKS5/HTTP proxy.
+type ProxyTestResult struct {
+	Success   bool   `json:"success"`
+	LatencyMs int64  `json:"latencyMs"`
+	ExitIP    string `json:"exitIp"`
+	Message   string `json:"message"`
+}
+
+// TestProxyConnection verifies SOCKS5/HTTP proxy connectivity, checks port availability,
+// and queries a lightweight endpoint to confirm external reachability and exit IP.
+func (a *App) TestProxyConnection(rawProxyURL string) ProxyTestResult {
+	if strings.TrimSpace(rawProxyURL) == "" {
+		return ProxyTestResult{
+			Success: false,
+			Message: "Proxy URL is empty.",
+		}
+	}
+
+	normalized, err := settings.NormalizeProxyURL(rawProxyURL)
+	if err != nil {
+		return ProxyTestResult{
+			Success: false,
+			Message: fmt.Sprintf("Invalid proxy URL: %v", err),
+		}
+	}
+
+	u, err := url.Parse(normalized)
+	if err != nil {
+		return ProxyTestResult{
+			Success: false,
+			Message: fmt.Sprintf("Failed to parse proxy URL: %v", err),
+		}
+	}
+
+	// Step 1: Check if the local proxy port is reachable
+	proxyHostPort := u.Host
+	tcpConn, err := net.DialTimeout("tcp", proxyHostPort, 3*time.Second)
+	if err != nil {
+		return ProxyTestResult{
+			Success: false,
+			Message: fmt.Sprintf("Cannot connect to local proxy server at %s. Please ensure your V2Ray / Shadowsocks client (e.g. v2rayN, v2rayA, Clash, Nekoray) is running and listening on this port.", proxyHostPort),
+		}
+	}
+	_ = tcpConn.Close()
+
+	// Step 2: Establish client through the proxy
+	var transport *http.Transport
+	scheme := strings.ToLower(u.Scheme)
+
+	baseDialer := &net.Dialer{
+		Timeout:   5 * time.Second,
+		KeepAlive: 5 * time.Second,
+	}
+
+	if scheme == "socks5" || scheme == "socks5h" || scheme == "socks" {
+		cleanURL := *u
+		cleanURL.Scheme = "socks5"
+		dialer, dialErr := xproxy.FromURL(&cleanURL, baseDialer)
+		if dialErr != nil {
+			return ProxyTestResult{
+				Success: false,
+				Message: fmt.Sprintf("Failed to initialize SOCKS5 dialer: %v", dialErr),
+			}
+		}
+
+		dialContext := func(ctx context.Context, network, address string) (net.Conn, error) {
+			if cd, ok := dialer.(interface {
+				DialContext(context.Context, string, string) (net.Conn, error)
+			}); ok {
+				return cd.DialContext(ctx, network, address)
+			}
+			return dialer.Dial(network, address)
+		}
+
+		transport = &http.Transport{
+			DialContext:         dialContext,
+			TLSHandshakeTimeout: 5 * time.Second,
+		}
+	} else {
+		transport = &http.Transport{
+			Proxy:               http.ProxyURL(u),
+			DialContext:         baseDialer.DialContext,
+			TLSHandshakeTimeout: 5 * time.Second,
+		}
+	}
+
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   7 * time.Second,
+	}
+
+	// Step 3: Fetch exit IP and measure latency
+	start := time.Now()
+	req, err := http.NewRequestWithContext(context.Background(), "GET", "https://1.1.1.1/cdn-cgi/trace", nil)
+	if err != nil {
+		req, _ = http.NewRequestWithContext(context.Background(), "GET", "https://api.ipify.org", nil)
+	}
+	req.Header.Set("User-Agent", "UploadPulse-Diagnostic/1.0")
+
+	resp, err := client.Do(req)
+	latency := time.Since(start).Milliseconds()
+
+	if err != nil {
+		return ProxyTestResult{
+			Success:   false,
+			LatencyMs: latency,
+			Message:   fmt.Sprintf("Connected to local proxy at %s, but external test timed out: %v. Please verify your V2Ray node configuration.", proxyHostPort, err),
+		}
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+	bodyStr := string(bodyBytes)
+
+	exitIP := ""
+	for _, line := range strings.Split(bodyStr, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "ip=") {
+			exitIP = strings.TrimPrefix(line, "ip=")
+			break
+		}
+	}
+	if exitIP == "" {
+		exitIP = strings.TrimSpace(bodyStr)
+	}
+
+	return ProxyTestResult{
+		Success:   true,
+		LatencyMs: latency,
+		ExitIP:    exitIP,
+		Message:   fmt.Sprintf("SOCKS5 proxy verified! Exit IP: %s (Ping: %d ms)", exitIP, latency),
+	}
+}
+

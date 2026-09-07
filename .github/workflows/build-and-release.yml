@@ -2,15 +2,14 @@ name: Build and Release UploadPulse
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "master" ]
     tags: [ "v*" ]
-  pull_request:
-    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
-  test-and-build:
-    name: Test and Build (Windows x64)
-    runs-on: ubuntu-latest
+  build-windows:
+    name: Build Native Windows Executable
+    runs-on: windows-latest
     permissions:
       contents: write
 
@@ -23,54 +22,65 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'go.mod'
+          go-version: '1.22'
           cache: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install Frontend Dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
+        run: npm install
 
-      - name: Build Frontend Assets
+      - name: Build Frontend Production Assets
         run: npm run build
 
       - name: Ensure Dist Directory Exists
-        run: mkdir -p dist && touch dist/.gitkeep
+        shell: bash
+        run: |
+          mkdir -p dist
+          touch dist/.gitkeep
 
-      - name: Run Go Unit Tests & AST Guard
+      - name: Run Go Unit Tests & Strict AST Guard
         run: go test -v ./...
 
-      - name: Embed Windows GUI Manifest & Resources
-        run: |
-          go install github.com/tc-hib/go-winres@latest
-          $(go env GOPATH)/bin/go-winres simply --arch amd64 --manifest gui --file-description "UploadPulse - Windows 11 Upload Speed Tester" --product-name "UploadPulse" --copyright "Copyright 2026 UploadPulse" --original-filename "UploadPulse-windows-amd64.exe"
+      - name: Install Wails v2 CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.9.2
 
-      - name: Compile Production 64-bit Windows 11 Executable
+      - name: Build Native Windows 64-bit Executable with Wails
         run: |
-          GOOS=windows GOARCH=amd64 go build -tags desktop,production -ldflags="-s -w -H windowsgui" -o UploadPulse-windows-amd64.exe .
+          wails build -platform windows/amd64 -clean -webview2 download -ldflags="-s -w" -o UploadPulse.exe
 
       - name: Verify Windows Executable Produced
+        shell: pwsh
         run: |
-          ls -lh UploadPulse-windows-amd64.exe
-          file UploadPulse-windows-amd64.exe
+          if (-not (Test-Path "build/bin/UploadPulse.exe")) {
+            Write-Error "build/bin/UploadPulse.exe was not created!"
+            exit 1
+          }
+          $item = Get-Item "build/bin/UploadPulse.exe"
+          Write-Host "Success! Generated: $($item.FullName) - Size: $($item.Length) bytes"
 
-      - name: Upload Build Artifact
+      - name: Package Standalone Zip Archive
+        shell: pwsh
+        run: |
+          Copy-Item "build/bin/UploadPulse.exe" -Destination "UploadPulse.exe"
+          Compress-Archive -Path "UploadPulse.exe", "README.md", "LICENSE" -DestinationPath "UploadPulse-windows-amd64.zip" -Force
+          Write-Host "Created UploadPulse-windows-amd64.zip successfully"
+
+      - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: UploadPulse-Windows-x64
-          path: UploadPulse-windows-amd64.exe
+          path: |
+            UploadPulse.exe
+            UploadPulse-windows-amd64.zip
 
       - name: Determine Release Tag and Name
         id: release_meta
-        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+        shell: bash
         run: |
           if [ "${{ github.ref_type }}" = "tag" ]; then
             TAG_NAME="${{ github.ref_name }}"
@@ -83,12 +93,13 @@ jobs:
           echo "release_name=${RELEASE_NAME}" >> $GITHUB_OUTPUT
 
       - name: Publish GitHub Release
-        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release_meta.outputs.tag_name }}
           name: ${{ steps.release_meta.outputs.release_name }}
-          files: UploadPulse-windows-amd64.exe
+          files: |
+            UploadPulse.exe
+            UploadPulse-windows-amd64.zip
           generate_release_notes: true
           draft: false
           prerelease: false

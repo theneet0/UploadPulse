@@ -42,6 +42,13 @@ export interface ServerInfo {
   available: boolean;
 }
 
+export interface ProxyTestResult {
+  success: boolean;
+  latencyMs: number;
+  exitIp: string;
+  message: string;
+}
+
 export interface NetworkSettings {
   durationSeconds: number;
   customDurationSeconds: number;

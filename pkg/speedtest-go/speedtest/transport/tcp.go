@@ -47,18 +47,23 @@ func uploadFormat(size int64) []byte {
 	return append(command, ' ', '0')
 }
 
+// ContextDialer is an interface for network dialers that accept a context.
+type ContextDialer interface {
+	DialContext(ctx context.Context, network, address string) (net.Conn, error)
+}
+
 type Client struct {
 	id      string
 	conn    net.Conn
 	host    string
 	version string
 
-	dialer *net.Dialer
+	dialer ContextDialer
 
 	reader *bufio.Reader
 }
 
-func NewClient(dialer *net.Dialer) (*Client, error) {
+func NewClient(dialer ContextDialer) (*Client, error) {
 	uuid, err := generateUUID()
 	if err != nil {
 		return nil, err

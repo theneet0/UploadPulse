@@ -10,6 +10,9 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/showwin/speedtest-go/speedtest/transport"
+	xproxy "golang.org/x/net/proxy"
 )
 
 var (
@@ -39,7 +42,7 @@ type Speedtest struct {
 
 	doer      *http.Client
 	config    *UserConfig
-	tcpDialer *net.Dialer
+	tcpDialer transport.ContextDialer
 	udpDialer *net.Dialer
 	ipDialer  *net.Dialer
 }
@@ -101,7 +104,7 @@ func (s *Speedtest) NewUserConfig(uc *UserConfig) {
 	var tcpSource net.Addr // If nil, a local address is automatically chosen.
 	var udpSource net.Addr
 	var icmpSource net.Addr
-	var proxy = http.ProxyFromEnvironment
+	var httpProxy = http.ProxyFromEnvironment
 	s.config = uc
 	if len(s.config.UserAgent) == 0 {
 		s.config.UserAgent = DefaultUserAgent
@@ -152,21 +155,45 @@ func (s *Speedtest) NewUserConfig(uc *UserConfig) {
 		}
 	}
 
-	if len(uc.Proxy) > 0 {
-		if parse, err := url.Parse(uc.Proxy); err != nil {
-			dbg.Printf("Warning: skipping parse the proxy host. err: %s\n", err.Error())
-		} else {
-			proxy = func(_ *http.Request) (*url.URL, error) {
-				return parse, err
-			}
-		}
-	}
-
-	s.tcpDialer = &net.Dialer{
+	rawTCPDialer := &net.Dialer{
 		LocalAddr: tcpSource,
 		Timeout:   30 * time.Second,
 		KeepAlive: 30 * time.Second,
 		Control:   uc.DialerControl,
+	}
+	s.tcpDialer = rawTCPDialer
+
+	if len(uc.Proxy) > 0 {
+		proxyStr := strings.TrimSpace(uc.Proxy)
+		if !strings.Contains(proxyStr, "://") {
+			proxyStr = "socks5://" + proxyStr
+		}
+		if parse, err := url.Parse(proxyStr); err != nil {
+			dbg.Printf("Warning: skipping parse the proxy host. err: %s\n", err.Error())
+		} else {
+			scheme := strings.ToLower(parse.Scheme)
+			if scheme == "socks5" || scheme == "socks5h" || scheme == "socks" {
+				cleanURL := *parse
+				if scheme == "socks5h" || scheme == "socks" {
+					cleanURL.Scheme = "socks5"
+				}
+				socksDialer, dialErr := xproxy.FromURL(&cleanURL, rawTCPDialer)
+				if dialErr != nil {
+					dbg.Printf("Warning: failed to initialize SOCKS5 dialer: %v\n", dialErr)
+				} else {
+					if cd, ok := socksDialer.(transport.ContextDialer); ok {
+						s.tcpDialer = cd
+					} else {
+						s.tcpDialer = &legacyDialerAdapter{d: socksDialer}
+					}
+					httpProxy = nil
+				}
+			} else {
+				httpProxy = func(_ *http.Request) (*url.URL, error) {
+					return parse, err
+				}
+			}
+		}
 	}
 
 	s.udpDialer = &net.Dialer{
@@ -184,7 +211,7 @@ func (s *Speedtest) NewUserConfig(uc *UserConfig) {
 	}
 
 	s.config.T = &http.Transport{
-		Proxy:                 proxy,
+		Proxy:                 httpProxy,
 		DialContext:           s.tcpDialer.DialContext,
 		ForceAttemptHTTP2:     true,
 		MaxIdleConns:          100,
@@ -194,6 +221,14 @@ func (s *Speedtest) NewUserConfig(uc *UserConfig) {
 	}
 
 	s.doer.Transport = s
+}
+
+type legacyDialerAdapter struct {
+	d xproxy.Dialer
+}
+
+func (l *legacyDialerAdapter) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	return l.d.Dial(network, address)
 }
 
 func (s *Speedtest) RoundTrip(req *http.Request) (*http.Response, error) {

@@ -102,11 +102,11 @@ func ValidateSettings(s AppSettings) (AppSettings, error) {
 
 	// Proxy validation
 	if s.Network.ProxyURL != "" {
-		parsed, err := url.Parse(strings.TrimSpace(s.Network.ProxyURL))
-		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https" && parsed.Scheme != "socks5") {
-			return s, fmt.Errorf("proxy URL must use http, https, or socks5 scheme")
+		normalized, err := NormalizeProxyURL(s.Network.ProxyURL)
+		if err != nil {
+			return s, err
 		}
-		s.Network.ProxyURL = parsed.String()
+		s.Network.ProxyURL = normalized
 	}
 
 	// Source IP validation: on Windows, must be a valid IPv4 or IPv6

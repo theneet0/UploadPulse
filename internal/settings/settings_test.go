@@ -117,3 +117,33 @@ func TestAtomicSaveAndCorruptedRecovery(t *testing.T) {
 		t.Errorf("expected .corrupt backup file to exist")
 	}
 }
+
+func TestNormalizeProxyURL(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+		hasError bool
+	}{
+		{"", "", false},
+		{"127.0.0.1:10808", "socks5://127.0.0.1:10808", false},
+		{"localhost:1080", "socks5://localhost:1080", false},
+		{"socks5://127.0.0.1:10808", "socks5://127.0.0.1:10808", false},
+		{"socks5h://127.0.0.1:10808", "socks5h://127.0.0.1:10808", false},
+		{"http://127.0.0.1:10809", "http://127.0.0.1:10809", false},
+		{"ftp://127.0.0.1:21", "", true},
+	}
+
+	for _, tc := range tests {
+		got, err := NormalizeProxyURL(tc.input)
+		if tc.hasError && err == nil {
+			t.Errorf("expected error for input %q, got none", tc.input)
+		}
+		if !tc.hasError && err != nil {
+			t.Errorf("unexpected error for input %q: %v", tc.input, err)
+		}
+		if !tc.hasError && got != tc.expected {
+			t.Errorf("for %q, expected %q, got %q", tc.input, tc.expected, got)
+		}
+	}
+}
+

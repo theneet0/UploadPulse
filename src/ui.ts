@@ -321,6 +321,24 @@ export class AppUI {
           </div>
         </div>
 
+        <!-- SOCKS5 / V2Ray Status Badge if Configured -->
+        ${
+          this.settings.network.proxyURL
+            ? `
+          <div class="w-full max-w-2xl flex items-center justify-between px-4 py-2.5 rounded-lg bg-[#60cdff]/10 border border-[#60cdff]/30 text-xs">
+            <div class="flex items-center gap-2 text-[#60cdff]">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+              <span class="font-medium">SOCKS5 / V2Ray Proxy:</span>
+              <span class="font-mono text-white/90 truncate max-w-xs">${this.settings.network.proxyURL}</span>
+            </div>
+            <button id="btn-quick-test-proxy" class="theme-btn-secondary text-[11px] px-2.5 py-1 flex items-center gap-1">
+              Test Proxy
+            </button>
+          </div>
+        `
+            : ''
+        }
+
         <!-- Server Info Card (Geometric Balance) -->
         <div class="w-full max-w-2xl flex items-center gap-4 p-4 rounded-xl bg-white/[0.03] border border-white/[0.08]">
           <div class="w-10 h-10 rounded-full bg-[#60cdff]/10 flex items-center justify-center text-[#60cdff] shrink-0">
@@ -331,7 +349,7 @@ export class AppUI {
           </div>
           <div class="flex-1 min-w-0">
             <div class="text-sm font-medium text-white truncate">${activeServerName}</div>
-            <div class="text-xs text-[#a0a0a0] truncate">Pure Upload Pipe &bull; ${this.settings.network.workerCount || 8} Active Connections</div>
+            <div class="text-xs text-[#a0a0a0] truncate">Pure Upload Pipe &bull; ${this.settings.network.workerCount || 8} Active Connections ${this.settings.network.proxyURL ? '&bull; Via SOCKS5' : ''}</div>
           </div>
           <div class="text-right shrink-0">
             <span class="text-xs font-mono px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Verified</span>
@@ -382,6 +400,23 @@ export class AppUI {
         this.settings.display.showLiveChart = !this.settings.display.showLiveChart;
         Bridge.updateSettings(this.settings);
         this.renderTestView(viewport);
+      };
+    }
+
+    // Quick test proxy button handler
+    const btnQuickTestProxy = document.getElementById('btn-quick-test-proxy');
+    if (btnQuickTestProxy) {
+      btnQuickTestProxy.onclick = async () => {
+        btnQuickTestProxy.textContent = 'Testing...';
+        btnQuickTestProxy.setAttribute('disabled', 'true');
+        const res = await Bridge.testProxyConnection(this.settings.network.proxyURL);
+        btnQuickTestProxy.removeAttribute('disabled');
+        btnQuickTestProxy.textContent = 'Test Proxy';
+        if (res.success) {
+          this.showToast(res.message, 'success');
+        } else {
+          this.showToast(res.message, 'error');
+        }
       };
     }
 
@@ -853,6 +888,57 @@ export class AppUI {
           </div>
         </div>
 
+        <!-- SOCKS5 / V2Ray Proxy Configuration Card -->
+        <div class="metric-card space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-[#60cdff]">SOCKS5 & V2Ray Proxy Configuration</h3>
+            <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-[#60cdff]/10 text-[#60cdff] border border-[#60cdff]/20">
+              v2ray / xray / clash / shadowsocks
+            </span>
+          </div>
+
+          <p class="text-xs text-[#a0a0a0]">
+            Route pure upload speed tests through your local V2Ray or Shadowsocks SOCKS5 inbound proxy port.
+          </p>
+
+          <div>
+            <label class="block text-xs font-medium text-[#a0a0a0] mb-1">Proxy Endpoint URL</label>
+            <div class="flex gap-2">
+              <input id="cfg-proxy-url" type="text"
+                placeholder="socks5://127.0.0.1:10808 (e.g. V2Ray default)"
+                value="${this.settings.network.proxyURL || ''}"
+                class="theme-input flex-1 px-3 py-1.5 text-xs bg-[#1c1c1c] text-white font-mono placeholder:text-neutral-600" />
+              <button id="btn-test-proxy" type="button" class="theme-btn-secondary px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 shrink-0" title="Verify Proxy Connection">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                <span>Test Connection</span>
+              </button>
+            </div>
+            <div id="proxy-test-status" class="mt-2 text-xs hidden"></div>
+          </div>
+
+          <!-- Quick Presets -->
+          <div>
+            <div class="text-[11px] text-[#a0a0a0] mb-1.5">Quick Presets:</div>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" class="btn-preset-proxy theme-btn-secondary px-2.5 py-1 text-[11px]" data-url="socks5://127.0.0.1:10808">
+                V2Ray (127.0.0.1:10808)
+              </button>
+              <button type="button" class="btn-preset-proxy theme-btn-secondary px-2.5 py-1 text-[11px]" data-url="socks5://127.0.0.1:10809">
+                V2Ray HTTP (127.0.0.1:10809)
+              </button>
+              <button type="button" class="btn-preset-proxy theme-btn-secondary px-2.5 py-1 text-[11px]" data-url="socks5://127.0.0.1:7890">
+                Clash / Sing-box (127.0.0.1:7890)
+              </button>
+              <button type="button" class="btn-preset-proxy theme-btn-secondary px-2.5 py-1 text-[11px]" data-url="socks5://127.0.0.1:1080">
+                Shadowsocks (127.0.0.1:1080)
+              </button>
+              <button type="button" class="btn-preset-proxy theme-btn-secondary px-2.5 py-1 text-[11px] text-rose-400 hover:text-rose-300" data-url="">
+                Direct (Disable Proxy)
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- Display & Localization Settings Card -->
         <div class="metric-card space-y-4">
           <h3 class="text-xs font-bold uppercase tracking-wider text-[#60cdff]">${this.t('settings_display')}</h3>
@@ -895,6 +981,65 @@ export class AppUI {
       </div>
     `;
 
+    // Presets click handlers
+    viewport.querySelectorAll('.btn-preset-proxy').forEach((btn) => {
+      (btn as HTMLElement).onclick = () => {
+        const url = (btn as HTMLElement).getAttribute('data-url') || '';
+        const proxyInput = document.getElementById('cfg-proxy-url') as HTMLInputElement | null;
+        if (proxyInput) {
+          proxyInput.value = url;
+          this.showToast(url ? `Preset selected: ${url}` : 'Proxy disabled (direct connection)', 'info');
+        }
+      };
+    });
+
+    // Test proxy connection button handler
+    const btnTestProxy = document.getElementById('btn-test-proxy');
+    const proxyStatus = document.getElementById('proxy-test-status');
+    if (btnTestProxy && proxyStatus) {
+      btnTestProxy.onclick = async () => {
+        const proxyInput = document.getElementById('cfg-proxy-url') as HTMLInputElement | null;
+        const rawUrl = proxyInput ? proxyInput.value.trim() : '';
+        if (!rawUrl) {
+          proxyStatus.className = 'mt-2 text-xs p-2 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 block';
+          proxyStatus.textContent = 'Please enter a proxy URL to test.';
+          return;
+        }
+
+        btnTestProxy.setAttribute('disabled', 'true');
+        btnTestProxy.innerHTML = `
+          <svg class="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+          <span>Testing...</span>
+        `;
+        proxyStatus.className = 'mt-2 text-xs p-2 rounded bg-white/5 border border-white/10 text-white/70 block';
+        proxyStatus.textContent = `Connecting to ${rawUrl}...`;
+
+        try {
+          const res = await Bridge.testProxyConnection(rawUrl);
+          btnTestProxy.removeAttribute('disabled');
+          btnTestProxy.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            <span>Test Connection</span>
+          `;
+
+          if (res.success) {
+            proxyStatus.className = 'mt-2 text-xs p-2.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 block font-mono';
+            proxyStatus.textContent = res.message;
+            this.showToast('Proxy verified successfully!', 'success');
+          } else {
+            proxyStatus.className = 'mt-2 text-xs p-2.5 rounded bg-rose-500/10 border border-rose-500/30 text-rose-400 block';
+            proxyStatus.textContent = res.message;
+            this.showToast('Proxy test failed.', 'error');
+          }
+        } catch (err: any) {
+          btnTestProxy.removeAttribute('disabled');
+          btnTestProxy.innerHTML = `<span>Test Connection</span>`;
+          proxyStatus.className = 'mt-2 text-xs p-2.5 rounded bg-rose-500/10 border border-rose-500/30 text-rose-400 block';
+          proxyStatus.textContent = `Error: ${err?.message || err}`;
+        }
+      };
+    }
+
     const btnSave = document.getElementById('btn-save-settings');
     if (btnSave) {
       btnSave.onclick = async () => {
@@ -906,12 +1051,14 @@ export class AppUI {
         const unit = (document.getElementById('cfg-speed-unit') as HTMLSelectElement).value as any;
         const lang = (document.getElementById('cfg-language') as HTMLSelectElement).value as any;
         const mask = (document.getElementById('cfg-mask-ip') as HTMLInputElement).checked;
+        const proxyURL = ((document.getElementById('cfg-proxy-url') as HTMLInputElement)?.value || '').trim();
 
         this.settings.network.durationSeconds = dur;
         this.settings.network.workerCount = wrk;
         this.settings.network.protocol = proto;
         this.settings.network.latencyMode = latMode;
         this.settings.network.savingMode = savMode;
+        this.settings.network.proxyURL = proxyURL;
         this.settings.display.speedUnit = unit;
         this.settings.display.language = lang;
         this.settings.display.maskSensitiveData = mask;

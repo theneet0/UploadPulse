@@ -14,9 +14,9 @@ type PacketLossAnalyzerOptions struct {
 	SamplingDuration       time.Duration
 	PacketSendingInterval  time.Duration
 	PacketSendingTimeout   time.Duration
-	SourceInterface        string      // source interface
-	TCPDialer              *net.Dialer // tcp dialer for sampling
-	UDPDialer              *net.Dialer // udp dialer for sending packet
+	SourceInterface        string                  // source interface
+	TCPDialer              transport.ContextDialer // tcp dialer for sampling
+	UDPDialer              *net.Dialer             // udp dialer for sending packet
 
 }
 

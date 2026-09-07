@@ -1,4 +1,4 @@
-import { AppSettings, HistoryRecord, LiveMetrics, LocaleData, ServerInfo, StateInfo } from './types';
+import { AppSettings, HistoryRecord, LiveMetrics, LocaleData, ProxyTestResult, ServerInfo, StateInfo } from './types';
 
 // Declare Wails window globals
 declare global {
@@ -21,6 +21,7 @@ declare global {
           StartTest(): Promise<any>;
           CancelTest(): Promise<void>;
           GetLocale(lang: string): Promise<LocaleData>;
+          TestProxyConnection(proxyURL: string): Promise<ProxyTestResult>;
         };
       };
     };
@@ -584,6 +585,24 @@ export const Bridge = {
       return window.go!.main.App.GetLocale(lang);
     }
     return lang === 'fa' ? PERSIAN_LOCALE : ENGLISH_LOCALE;
+  },
+
+  async testProxyConnection(proxyURL: string): Promise<ProxyTestResult> {
+    if (isWails && window.go?.main?.App?.TestProxyConnection) {
+      return window.go.main.App.TestProxyConnection(proxyURL);
+    }
+    // Web preview simulation:
+    const trimmed = (proxyURL || '').trim();
+    if (!trimmed) {
+      return { success: false, latencyMs: 0, exitIp: '', message: 'Proxy URL is empty.' };
+    }
+    await new Promise((r) => setTimeout(r, 600));
+    return {
+      success: true,
+      latencyMs: 42,
+      exitIp: '104.28.19.88 (V2Ray Simulated)',
+      message: `SOCKS5 connection verified! Exit IP: 104.28.19.88 (Ping: 42 ms)`,
+    };
   },
 
   on(eventName: string, cb: (...args: any[]) => void) {
