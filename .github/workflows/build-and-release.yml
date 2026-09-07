@@ -11,10 +11,14 @@ jobs:
   test-and-build:
     name: Test and Build (Windows x64)
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -64,10 +68,29 @@ jobs:
           name: UploadPulse-Windows-x64
           path: UploadPulse-windows-amd64.exe
 
-      - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Determine Release Tag and Name
+        id: release_meta
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG_NAME="${{ github.ref_name }}"
+            RELEASE_NAME="UploadPulse ${TAG_NAME}"
+          else
+            TAG_NAME="v1.0.${{ github.run_number }}"
+            RELEASE_NAME="UploadPulse v1.0.${{ github.run_number }}"
+          fi
+          echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
+          echo "release_name=${RELEASE_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Publish GitHub Release
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.release_meta.outputs.tag_name }}
+          name: ${{ steps.release_meta.outputs.release_name }}
           files: UploadPulse-windows-amd64.exe
+          generate_release_notes: true
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
