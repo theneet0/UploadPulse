@@ -1,0 +1,21 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "UploadPulse",
+  "outputfilename": "UploadPulse-windows-amd64",
+  "frontend:dir": ".",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "UploadPulse",
+    "email": "info@uploadpulse.app"
+  },
+  "info": {
+    "companyName": "UploadPulse",
+    "productName": "UploadPulse",
+    "productVersion": "1.0.0",
+    "copyright": "Copyright 2026 UploadPulse",
+    "comments": "Pure upload speed measurement tool for Windows 11"
+  }
+}

@@ -19,7 +19,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version-file: 'go.mod'
           cache: true
 
       - name: Setup Node.js
@@ -44,9 +44,19 @@ jobs:
       - name: Run Go Unit Tests & AST Guard
         run: go test -v ./...
 
-      - name: Compile 64-bit Windows 11 Executable
+      - name: Embed Windows GUI Manifest & Resources
         run: |
-          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -H windowsgui" -o UploadPulse-windows-amd64.exe .
+          go install github.com/tc-hib/go-winres@latest
+          $(go env GOPATH)/bin/go-winres simply --arch amd64 --manifest gui --file-description "UploadPulse - Windows 11 Upload Speed Tester" --product-name "UploadPulse" --copyright "Copyright 2026 UploadPulse" --original-filename "UploadPulse-windows-amd64.exe"
+
+      - name: Compile Production 64-bit Windows 11 Executable
+        run: |
+          GOOS=windows GOARCH=amd64 go build -tags desktop,production -ldflags="-s -w -H windowsgui" -o UploadPulse-windows-amd64.exe .
+
+      - name: Verify Windows Executable Produced
+        run: |
+          ls -lh UploadPulse-windows-amd64.exe
+          file UploadPulse-windows-amd64.exe
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
