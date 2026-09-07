@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uploadpulse/uploadpulse/internal/platform/windows"
+	"github.com/uploadpulse/uploadpulse/internal/platform"
 	"github.com/uploadpulse/uploadpulse/internal/settings"
 )
 
@@ -32,7 +32,7 @@ func NewManager(customPath ...string) (*Manager, error) {
 		dataDir = filepath.Dir(filePath)
 	} else {
 		var err error
-		dataDir, err = windows.GetAppDataDir()
+		dataDir, err = platform.GetAppDataDir()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get app data dir: %w", err)
 		}
