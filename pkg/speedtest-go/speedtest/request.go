@@ -125,7 +125,7 @@ func (s *Server) downloadTestContext(ctx context.Context, downloadRequest downlo
 		if err := downloadRequest(_context, s, 3); err != nil {
 			atomic.AddInt64(&errorTimes, 1)
 		}
-	}).Start(cancel, 0)
+	}).StartContext(ctx, cancel, 0)
 	duration := time.Since(start)
 	s.DLSpeed = ByteRate(s.Context.GetEWMADownloadRate())
 	if s.DLSpeed == 0 && float64(errorTimes)/float64(requestTimes) > 0.1 {

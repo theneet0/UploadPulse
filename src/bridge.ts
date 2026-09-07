@@ -19,6 +19,8 @@ declare global {
           PingServer(serverID: string): Promise<number>;
           ValidateCustomServer(customURL: string): Promise<ServerInfo>;
           StartTest(): Promise<any>;
+          StartDownloadTest(): Promise<any>;
+          StartUploadTest(): Promise<any>;
           CancelTest(): Promise<void>;
           GetLocale(lang: string): Promise<LocaleData>;
           TestProxyConnection(proxyURL: string): Promise<ProxyTestResult>;
@@ -37,25 +39,32 @@ export const ENGLISH_LOCALE: LocaleData = {
   languageCode: 'en',
   direction: 'ltr',
   strings: {
-    app_title: 'UploadPulse',
-    nav_test: 'Upload Test',
+    app_title: 'UploadPulse & SpeedTest Suite',
+    nav_test: 'Speed Test',
     nav_servers: 'Servers',
     nav_history: 'History',
     nav_settings: 'Settings',
     nav_privacy: 'Privacy',
-    start_test: 'Start Upload Test',
+    start_test: 'Start Speed Test',
     stop_test: 'Stop Test',
+    mode_both: 'Download & Upload',
+    mode_download: 'Download Only',
+    mode_upload: 'Upload Only',
     state_idle: 'Ready to test',
     state_discovering: 'Discovering servers...',
-    state_measuring_latency: 'Measuring latency...',
+    state_measuring_latency: 'Measuring latency & jitter...',
+    state_downloading: 'Downloading...',
     state_uploading: 'Uploading...',
-    state_completed: 'Upload completed',
+    state_completed: 'Test completed',
     state_cancelled: 'Test cancelled',
     state_failed: 'Test failed',
     meter_current: 'Current Speed',
     meter_peak: 'Peak Speed',
     meter_average: 'Average Speed',
-    meter_latency: 'Latency',
+    meter_download: 'Download Speed',
+    meter_upload: 'Upload Speed',
+    meter_latency: 'Latency (Ping)',
+    meter_jitter: 'Jitter',
     meter_confirmed_data: 'Server-confirmed data',
     meter_transmitted_data: 'Transmitted Volume',
     meter_workers: 'Active Connections',
@@ -76,26 +85,39 @@ export const ENGLISH_LOCALE: LocaleData = {
     export_json: 'Export JSON',
     history_empty: 'No speed tests recorded yet.',
     settings_network: 'Network Configuration',
+    settings_test_mode: 'Test Mode',
     settings_duration: 'Test Duration (seconds)',
-    settings_workers: 'Concurrent Upload Workers',
+    settings_workers: 'Concurrent Connection Threads',
     settings_workers_auto: 'Auto (Default 8)',
     settings_protocol: 'Test Protocol',
     settings_latency_mode: 'Latency Mode',
+    settings_jitter_samples: 'Jitter Ping Samples',
+    settings_ip_version: 'IP Protocol Version',
+    settings_warmup: 'Warm-up Phase (seconds)',
     settings_saving_mode: 'Saving Mode (reduces bandwidth)',
     settings_proxy: 'Proxy URL (http/https/socks5)',
     settings_source_ip: 'Source IP (local interface IPv4/IPv6)',
+    settings_custom_dns: 'Custom DNS Resolver (e.g. 1.1.1.1:53)',
+    settings_user_agent: 'Custom User-Agent',
+    settings_virtual_city: 'Virtual City Name',
+    settings_coordinates: 'Virtual Coordinates (Lat / Lon)',
+    settings_server_filter: 'Server Search Filter Keyword',
+    settings_country_filter: 'Country ISO Code (e.g. US, DE, IR)',
     settings_display: 'Display Preferences',
     settings_speed_unit: 'Speed Unit',
     settings_precision: 'Decimal Precision',
     settings_theme: 'Theme',
     settings_mica: 'Enable Windows 11 Mica Backdrop',
     settings_reduced_motion: 'Reduced Motion',
-    settings_chart: 'Show Live Upload Chart',
+    settings_chart: 'Show Live Throughput Chart',
+    settings_chart_points: 'Chart Data Points Retention',
+    settings_sound_alert: 'Play Audio Alert on Completion',
+    settings_auto_start: 'Auto-start Test on App Launch',
     settings_privacy_mask: 'Mask IP and Sensitive Information',
     settings_language: 'Language',
     privacy_title: 'Privacy & Traffic Notice',
-    privacy_body_1: 'UploadPulse measures internet upload speed exclusively. It never performs a download test during startup, server discovery, server selection, diagnostics, or active measurement.',
-    privacy_body_2: 'An upload speed test transmits randomly generated binary data to the designated test server to saturate your upstream pipe. This consumes actual upload network quota.',
+    privacy_body_1: 'UploadPulse is an advanced, high-precision speed test suite. It supports full download, upload, jitter, and latency benchmarks according to your selected configuration.',
+    privacy_body_2: 'Tests saturate your downstream and upstream connections with random binary payloads to accurately measure network throughput and buffer bloat.',
     privacy_body_3: 'UploadPulse contains zero telemetry, zero analytics, zero advertisements, and no cloud accounts. All settings and history remain strictly on your device in %LOCALAPPDATA%\\UploadPulse.',
     unavailable: 'Unavailable',
     save_settings: 'Save Settings',
@@ -107,25 +129,32 @@ export const PERSIAN_LOCALE: LocaleData = {
   languageCode: 'fa',
   direction: 'rtl',
   strings: {
-    app_title: 'آپلودپالس (UploadPulse)',
-    nav_test: 'تست آپلود',
+    app_title: 'آپلودپالس و آزمون سرعت اینترنت',
+    nav_test: 'تست سرعت',
     nav_servers: 'سرورها',
     nav_history: 'تاریخچه',
     nav_settings: 'تنظیمات',
     nav_privacy: 'حریم خصوصی',
-    start_test: 'شروع تست آپلود',
+    start_test: 'شروع تست سرعت',
     stop_test: 'توقف تست',
+    mode_both: 'تست دوگانه (دانلود و آپلود)',
+    mode_download: 'فقط دانلود',
+    mode_upload: 'فقط آپلود',
     state_idle: 'آماده برای تست',
     state_discovering: 'در حال یافتن سرورها...',
-    state_measuring_latency: 'در حال سنجش تأخیر (پینگ)...',
+    state_measuring_latency: 'در حال سنجش پینگ و جیتر (Jitter)...',
+    state_downloading: 'در حال دانلود داده‌ها...',
     state_uploading: 'در حال آپلود داده‌ها...',
-    state_completed: 'تست آپلود با موفقیت پایان یافت',
+    state_completed: 'تست با موفقیت پایان یافت',
     state_cancelled: 'تست توسط کاربر لغو شد',
     state_failed: 'تست با خطا مواجه شد',
     meter_current: 'سرعت لحظه‌ای',
     meter_peak: 'بیشترین سرعت',
     meter_average: 'میانگین سرعت',
+    meter_download: 'سرعت دانلود',
+    meter_upload: 'سرعت آپلود',
     meter_latency: 'تأخیر (پینگ)',
+    meter_jitter: 'نوسان تأخیر (جیتر)',
     meter_confirmed_data: 'داده‌های تأیید شده سرور',
     meter_transmitted_data: 'حجم کل ارسالی',
     meter_workers: 'اتصالات همزمان',
@@ -146,27 +175,40 @@ export const PERSIAN_LOCALE: LocaleData = {
     export_json: 'خروجی JSON',
     history_empty: 'هنوز هیچ تستی ثبت نشده است.',
     settings_network: 'پیکربندی شبکه',
+    settings_test_mode: 'حالت سنجش سرعت',
     settings_duration: 'مدت زمان تست (ثانیه)',
     settings_workers: 'تعداد اتصالات همزمان',
     settings_workers_auto: 'خودکار (پیش‌فرض ۸)',
     settings_protocol: 'پروتکل تست',
     settings_latency_mode: 'حالت سنجش تأخیر',
+    settings_jitter_samples: 'تعداد نمونه‌های اندازه‌گیری جیتر',
+    settings_ip_version: 'نسخه پروتکل IP',
+    settings_warmup: 'مدت زمان پیش‌گرمایش (ثانیه)',
     settings_saving_mode: 'حالت صرفه‌جویی در ترافیک',
     settings_proxy: 'آدرس پروکسی (http/https/socks5)',
-    settings_source_ip: 'آی‌پی مبدأ کارت شبکه محلی',
+    settings_source_ip: 'آی‌پی کارت شبکه محلی',
+    settings_custom_dns: 'سرور DNS اختصاصی (مانند 1.1.1.1:53)',
+    settings_user_agent: 'عامل کاربر (User-Agent)',
+    settings_virtual_city: 'نام شهر مجازی',
+    settings_coordinates: 'مختصات جغرافیایی مجازی (Lat / Lon)',
+    settings_server_filter: 'کلمه کلیدی فیلتر سرورها',
+    settings_country_filter: 'کد دوحرفی کشور (مانند IR, DE, US)',
     settings_display: 'تنظیمات نمایش و ظاهر',
     settings_speed_unit: 'واحد اندازه‌گیری سرعت',
     settings_precision: 'تعداد ارقام اعشار',
     settings_theme: 'پوسته ظاهری',
     settings_mica: 'فعال‌سازی افکت شیشه‌ای میکا ویندوز ۱۱',
     settings_reduced_motion: 'کاهش انیمیشن‌ها',
-    settings_chart: 'نمایش نمودار زنده آپلود',
+    settings_chart: 'نمایش نمودار زنده سرعت',
+    settings_chart_points: 'تعداد نقاط ذخیره در نمودار',
+    settings_sound_alert: 'پخش صدای هشدار در پایان تست',
+    settings_auto_start: 'شروع خودکار تست هنگام اجرای برنامه',
     settings_privacy_mask: 'ماسک کردن آی‌پی و اطلاعات حساس',
     settings_language: 'زبان برنامه',
     privacy_title: 'بیانیه حریم خصوصی و مصرف ترافیک',
-    privacy_body_1: 'نرم‌افزار آپلودپالس منحصراً برای سنجش سرعت ارسال (آپلود) طراحی شده است. این نرم‌افزار هرگز در هیچ مرحله‌ای تست دانلود انجام نمی‌دهد.',
-    privacy_body_2: 'تست سرعت آپلود با ارسال داده‌های تصادفی امن به سرور هدف انجام می‌شود تا پهنای باند خروجی شما ارزیابی شود. این عملیات از حجم ترافیک اینترنت شما استفاده می‌کند.',
-    privacy_body_3: 'آپلودپالس فاقد هرگونه ابزار جمع‌آوری داده، آمارگیر، تبلیغات یا اتصال به فضای ابری است. کلیه اطلاعات و تاریخچه تست‌ها منحصراً روی رایانه شما در مسیر %LOCALAPPDATA%\\UploadPulse ذخیره می‌گردد.',
+    privacy_body_1: 'نرم‌افزار آپلودپالس یک بسته کامل و بسیار دقیق سنجش سرعت است که از تست‌های دانلود، آپلود، پینگ و جیتر پشتیبانی می‌کند.',
+    privacy_body_2: 'تست‌های سرعت جهت سنجش دقیق پهنای باند و نوسانات بافر شبکه، به ارسال و دریافت داده‌های امن تصادفی اقدام می‌کنند.',
+    privacy_body_3: 'این نرم‌افزار فاقد هرگونه ابزار جمع‌آوری اطلاعات شخصی، آمارگیری یا تبلیغات است و کلیه اطلاعات فقط در رایانه شما ذخیره می‌گردد.',
     unavailable: 'نامشخص',
     save_settings: 'ذخیره تنظیمات',
     settings_saved: 'تنظیمات با موفقیت ذخیره شد',
@@ -175,21 +217,24 @@ export const PERSIAN_LOCALE: LocaleData = {
 
 const DEFAULT_SETTINGS: AppSettings = {
   network: {
+    testMode: 'both',
     durationSeconds: 15,
-    customDurationSeconds: 15,
     workerCount: 8,
     protocol: 'http',
     latencyMode: 'http',
+    jitterSampleCount: 10,
+    ipVersion: 'auto',
+    warmupSeconds: 0,
     savingMode: false,
     proxyURL: '',
     sourceIP: '',
-    dnsBindSource: false,
-    userAgent: 'UploadPulse/1.0.0 (Windows 11 x64; Pure Upload Meter)',
+    customDNSServer: '',
+    userAgent: 'UploadPulse/2.0.0 (Windows 11 x64; Advanced SpeedTest Suite)',
     virtualCity: '',
     latitude: 0,
     longitude: 0,
     serverSearchKeyword: '',
-    countryCodeFilter: '',
+    countryFilter: '',
     serverSelectionMode: 'auto',
     selectedServerID: '',
     customServerURL: '',
@@ -202,13 +247,15 @@ const DEFAULT_SETTINGS: AppSettings = {
     reducedMotion: false,
     showLiveChart: true,
     chartRetentionPoints: 40,
-    maskSensitiveData: false,
     completionNotification: true,
+    soundAlert: true,
+    autoStartOnLaunch: false,
+    maskSensitiveData: false,
     language: 'en',
   },
   history: {
     maxRecords: 100,
-    autoPrune: true,
+    retentionDays: 90,
   },
 };
 
@@ -450,105 +497,181 @@ export const Bridge = {
     if (isWails) {
       return window.go!.main.App.StartTest();
     }
-    // Realistic simulated upload in browser preview mode
+    return this.runSimulatedTest(previewSettings.network.testMode || 'both');
+  },
+
+  async startDownloadTest(): Promise<any> {
+    if (isWails && window.go?.main?.App?.StartDownloadTest) {
+      return window.go.main.App.StartDownloadTest();
+    }
+    return this.runSimulatedTest('download');
+  },
+
+  async startUploadTest(): Promise<any> {
+    if (isWails && window.go?.main?.App?.StartUploadTest) {
+      return window.go.main.App.StartUploadTest();
+    }
+    return this.runSimulatedTest('upload');
+  },
+
+  async runSimulatedTest(mode: 'both' | 'download' | 'upload'): Promise<any> {
     if (simulatedTestInterval) clearInterval(simulatedTestInterval);
 
     const sessionID = 'sim-' + Date.now();
     Bridge.emit('test:state', {
       state: 'discovering_servers',
       sessionID,
-      progressPercent: 10,
-      message: 'Discovering optimal upload server...',
+      progressPercent: 8,
+      message: 'Discovering optimal speedtest server...',
     } as StateInfo);
 
-    await new Promise((r) => setTimeout(r, 600));
+    await new Promise((r) => setTimeout(r, 450));
 
     Bridge.emit('test:state', {
       state: 'measuring_latency',
       sessionID,
-      progressPercent: 20,
-      message: 'Measuring server upload latency...',
+      progressPercent: 18,
+      message: 'Benchmarking latency & jitter (10 ping samples)...',
     } as StateInfo);
 
-    await new Promise((r) => setTimeout(r, 600));
+    const measuredLatency = 14.5;
+    const measuredJitter = 2.1;
+
+    await new Promise((r) => setTimeout(r, 450));
+
+    const totalDuration = Math.max(5, previewSettings.network.durationSeconds || 15);
+    const hasDownload = mode === 'both' || mode === 'download';
+    const hasUpload = mode === 'both' || mode === 'upload';
+    const phaseDuration = mode === 'both' ? totalDuration / 2 : totalDuration;
+
+    let currentPhase: 'download' | 'upload' = hasDownload ? 'download' : 'upload';
+    let phaseElapsed = 0;
+    let totalElapsed = 0;
+
+    let downTransferred = 0;
+    let upTransferred = 0;
+    let downPeak = 0;
+    let upPeak = 0;
+
+    const baseDownSpeed = 118000000; // ~118 Mbps
+    const baseUpSpeed = 65000000;    // ~65 Mbps
 
     Bridge.emit('test:state', {
-      state: 'uploading',
+      state: currentPhase === 'download' ? 'downloading' : 'uploading',
       sessionID,
-      progressPercent: 25,
-      message: 'Transmitting binary data payload...',
+      progressPercent: 20,
+      message: currentPhase === 'download' ? 'Testing download speed...' : 'Testing upload speed...',
     } as StateInfo);
 
-    let elapsed = 0;
-    const totalDuration = previewSettings.network.durationSeconds || 15;
-    let transferred = 0;
-    let peak = 0;
-    const baseTargetSpeed = 65000000; // ~65 Mbps baseline
-
     simulatedTestInterval = setInterval(() => {
-      elapsed += 0.25;
-      const progress = Math.min(95, 25 + (elapsed / totalDuration) * 70);
+      const step = 0.25;
+      phaseElapsed += step;
+      totalElapsed += step;
 
-      // Organic variation for realistic telemetry
-      const noise = (Math.sin(elapsed * 2) * 0.15 + (Math.random() - 0.5) * 0.1);
-      const currentSpeed = Math.max(10000000, baseTargetSpeed * (1 + noise));
-      if (currentSpeed > peak) peak = currentSpeed;
-      transferred += (currentSpeed * 0.25) / 8;
+      const noise = Math.sin(phaseElapsed * 2) * 0.12 + (Math.random() - 0.5) * 0.08;
+      let activeSpeed = 0;
 
-      const confirmed = transferred * 0.985;
+      if (currentPhase === 'download') {
+        activeSpeed = Math.max(20000000, baseDownSpeed * (1 + noise));
+        if (activeSpeed > downPeak) downPeak = activeSpeed;
+        downTransferred += (activeSpeed * step) / 8;
+      } else {
+        activeSpeed = Math.max(15000000, baseUpSpeed * (1 + noise));
+        if (activeSpeed > upPeak) upPeak = activeSpeed;
+        upTransferred += (activeSpeed * step) / 8;
+      }
+
+      const totalTransferred = downTransferred + upTransferred;
+      const progress = Math.min(95, 20 + (totalElapsed / totalDuration) * 75);
 
       Bridge.emit('test:metrics', {
         sessionID,
-        instantaneousSpeedBps: currentSpeed,
-        peakSpeedBps: peak,
-        averageSpeedBps: (transferred * 8) / elapsed,
-        transferredBytes: Math.floor(transferred),
-        serverConfirmedBytes: Math.floor(confirmed),
-        serverConfirmedRatio: 0.985,
-        elapsedSeconds: elapsed,
-        estimatedRemainingSeconds: Math.max(0, totalDuration - elapsed),
+        testMode: mode,
+        phase: currentPhase,
+        instantaneousSpeedBps: activeSpeed,
+        peakSpeedBps: currentPhase === 'download' ? downPeak : upPeak,
+        averageSpeedBps: currentPhase === 'download'
+          ? (downTransferred * 8) / phaseElapsed
+          : (upTransferred * 8) / phaseElapsed,
+        transferredBytes: Math.floor(totalTransferred),
+        downloadBytes: Math.floor(downTransferred),
+        uploadBytes: Math.floor(upTransferred),
+        serverConfirmedBytes: Math.floor(totalTransferred * 0.99),
+        serverConfirmedRatio: 0.99,
+        elapsedSeconds: totalElapsed,
+        estimatedRemainingSeconds: Math.max(0, totalDuration - totalElapsed),
         activeWorkers: previewSettings.network.workerCount || 8,
-        latencyMs: 16,
+        latencyMs: measuredLatency,
+        jitterMs: measuredJitter,
+        minLatencyMs: 13.1,
+        maxLatencyMs: 18.2,
       } as LiveMetrics);
 
       Bridge.emit('test:state', {
-        state: 'uploading',
+        state: currentPhase === 'download' ? 'downloading' : 'uploading',
         sessionID,
         progressPercent: Math.floor(progress),
-        message: `Uploading: ${(currentSpeed / 1000000).toFixed(1)} Mbps`,
+        message: `${currentPhase === 'download' ? 'Downloading' : 'Uploading'}: ${(activeSpeed / 1000000).toFixed(1)} Mbps`,
       } as StateInfo);
 
-      if (elapsed >= totalDuration) {
+      // Phase Transition
+      if (currentPhase === 'download' && hasUpload && phaseElapsed >= phaseDuration) {
+        currentPhase = 'upload';
+        phaseElapsed = 0;
+        Bridge.emit('test:state', {
+          state: 'uploading',
+          sessionID,
+          progressPercent: Math.floor(progress),
+          message: 'Swapping to upload phase...',
+        } as StateInfo);
+        return;
+      }
+
+      if (totalElapsed >= totalDuration) {
         clearInterval(simulatedTestInterval);
         simulatedTestInterval = null;
 
-        const finalAvg = (transferred * 8) / totalDuration;
+        const avgDown = hasDownload ? (downTransferred * 8) / (hasUpload ? phaseDuration : totalDuration) : 0;
+        const avgUp = hasUpload ? (upTransferred * 8) / (hasDownload ? phaseDuration : totalDuration) : 0;
+
         const record: HistoryRecord = {
           id: sessionID,
           timestamp: new Date().toISOString(),
           success: true,
-          avgUploadSpeedBps: finalAvg,
-          peakUploadSpeedBps: peak,
-          finalStableSpeedBps: currentSpeed,
+          testMode: mode,
+          avgDownloadSpeedBps: avgDown,
+          peakDownloadSpeedBps: downPeak,
+          avgUploadSpeedBps: avgUp,
+          peakUploadSpeedBps: upPeak,
+          finalStableSpeedBps: activeSpeed,
           durationSeconds: totalDuration,
-          transferredBytes: Math.floor(transferred),
-          serverConfirmedBytes: Math.floor(confirmed),
-          serverConfirmedRatio: 0.985,
-          latencyMs: 16,
+          downloadBytes: Math.floor(downTransferred),
+          uploadBytes: Math.floor(upTransferred),
+          transferredBytes: Math.floor(totalTransferred),
+          serverConfirmedBytes: Math.floor(totalTransferred * 0.99),
+          serverConfirmedRatio: 0.99,
+          latencyMs: measuredLatency,
+          jitterMs: measuredJitter,
+          minLatencyMs: 13.1,
+          maxLatencyMs: 18.2,
           clientIP: '192.168.1.105',
           isp: 'Gigabit Fiber Uplink',
           server: {
             id: 'auto-1',
-            name: 'Frankfurt Optimal Uplink',
-            sponsor: 'CoreBackbone GmbH',
+            name: 'Frankfurt Optimal Cloud Hub',
+            sponsor: 'CoreBackbone Global',
             country: 'Germany',
             city: 'Frankfurt',
             distance: 24,
-            latency: 16,
+            latency: measuredLatency,
+            jitterMs: measuredJitter,
+            minLatency: 13.1,
+            maxLatency: 18.2,
             host: 'fra1.speedtest.net',
           },
-          effectiveSettings: previewSettings.network,
+          effectiveSettings: { ...previewSettings.network, testMode: mode },
         };
+
         previewHistory.unshift(record);
         localStorage.setItem('uploadpulse_history', JSON.stringify(previewHistory));
 
@@ -556,7 +679,7 @@ export const Bridge = {
           state: 'completed',
           sessionID,
           progressPercent: 100,
-          message: 'Upload test completed successfully.',
+          message: `Speed test (${mode.toUpperCase()}) completed successfully.`,
         } as StateInfo);
       }
     }, 250);

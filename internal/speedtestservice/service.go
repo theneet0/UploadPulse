@@ -228,14 +228,32 @@ func (s *Service) ValidateAndPrepareCustomServer(customURL string, cfg settings.
 }
 
 // StartUploadTest initiates an upload measurement session.
-// CRITICAL: Strictly measures upload speed only; NEVER calls DownloadTest().
 func (s *Service) StartUploadTest(cfg settings.NetworkSettings) (*TestResult, error) {
+	cfg.TestMode = "upload"
+	return s.StartTest(cfg)
+}
+
+// StartDownloadTest initiates a download measurement session.
+func (s *Service) StartDownloadTest(cfg settings.NetworkSettings) (*TestResult, error) {
+	cfg.TestMode = "download"
+	return s.StartTest(cfg)
+}
+
+// StartTest initiates a speed measurement session based on cfg.TestMode ("both", "download", or "upload").
+func (s *Service) StartTest(cfg settings.NetworkSettings) (*TestResult, error) {
 	s.mu.Lock()
 	// Single active test constraint
 	if s.state != StateIdle && s.state != StateCompleted && s.state != StateCancelled && s.state != StateFailed {
 		s.mu.Unlock()
 		return nil, errors.New("another test is already in progress")
 	}
+
+	// Default test mode
+	testMode := strings.ToLower(strings.TrimSpace(cfg.TestMode))
+	if testMode != "download" && testMode != "upload" && testMode != "both" {
+		testMode = "both"
+	}
+	cfg.TestMode = testMode
 
 	// Wait for any residual workers to guarantee clean state
 	s.workerWG.Wait()
@@ -257,7 +275,7 @@ func (s *Service) StartUploadTest(cfg settings.NetworkSettings) (*TestResult, er
 		s.workerWG.Done()
 	}()
 
-	s.transition(StateDiscoveringServers, sessionID, "Finding optimal upload server...", 10, "")
+	s.transition(StateDiscoveringServers, sessionID, "Finding optimal speedtest server...", 10, "")
 
 	client := s.createSpeedtestClient(cfg)
 
@@ -314,7 +332,7 @@ func (s *Service) StartUploadTest(cfg settings.NetworkSettings) (*TestResult, er
 		}
 
 	default: // "auto"
-		s.transition(StateDiscoveringServers, sessionID, "Discovering closest servers...", 20, "")
+		s.transition(StateDiscoveringServers, sessionID, "Discovering closest servers...", 15, "")
 		servers, err := client.FetchServerListContext(ctx)
 		if err != nil {
 			mappedErr := s.mapNetworkError(err)
@@ -331,8 +349,7 @@ func (s *Service) StartUploadTest(cfg settings.NetworkSettings) (*TestResult, er
 		s.cachedServers = servers
 		s.mu.Unlock()
 
-		s.transition(StateMeasuringLatency, sessionID, "Measuring latency to select best server...", 35, "")
-		// Ping closest servers to select lowest latency server
+		s.transition(StateMeasuringLatency, sessionID, "Measuring latency and jitter...", 25, "")
 		count := 5
 		if len(servers) < count {
 			count = len(servers)
@@ -368,135 +385,277 @@ func (s *Service) StartUploadTest(cfg settings.NetworkSettings) (*TestResult, er
 		return nil, err
 	}
 
-	// Check if cancelled before starting upload
+	// Check if cancelled before starting tests
 	if ctx.Err() != nil {
 		s.transition(StateCancelled, sessionID, "Test cancelled", 0, "")
 		return nil, ctx.Err()
 	}
 
-	// Measure ping on chosen server if not measured yet
-	if targetServer.Latency == 0 {
-		s.transition(StateMeasuringLatency, sessionID, "Measuring server latency...", 45, targetServer.ID)
-		_ = targetServer.PingTestContext(ctx, nil)
+	// Measure thorough ping and jitter on chosen server
+	s.transition(StateMeasuringLatency, sessionID, "Measuring ping and jitter...", 30, targetServer.ID)
+	_ = targetServer.PingTestContext(ctx, nil)
+
+	latencyMs := targetServer.Latency.Milliseconds()
+	jitterMs := float64(targetServer.Jitter.Nanoseconds()) / 1e6
+
+	// Dispatch initial ping & jitter metric
+	s.mu.Lock()
+	if s.callbacks.OnMetrics != nil {
+		cb := s.callbacks.OnMetrics
+		s.mu.Unlock()
+		cb(LiveMetrics{
+			Phase:     "latency",
+			SessionID: sessionID,
+			Timestamp: time.Now(),
+			LatencyMs: latencyMs,
+			JitterMs:  jitterMs,
+		})
+	} else {
+		s.mu.Unlock()
 	}
 
-	// Prepare Upload Test
-	s.transition(StateUploading, sessionID, "Starting upload test...", 50, targetServer.ID)
-
-	// Configure DataManager settings
 	duration := time.Duration(cfg.DurationSeconds) * time.Second
-	targetServer.Context.SetCaptureTime(duration)
-	targetServer.Context.SetRateCaptureFrequency(100 * time.Millisecond)
+	if duration <= 0 {
+		duration = 10 * time.Second
+	}
 
 	activeWorkersCount := 8
 	if cfg.WorkerCount > 0 {
 		activeWorkersCount = cfg.WorkerCount
-		targetServer.Context.SetNThread(cfg.WorkerCount)
-	} else {
-		targetServer.Context.SetNThread(0)
 	}
+
+	var avgDownloadSpeedBps float64
+	var peakDownloadSpeedBps float64
+	var downloadBytes int64
+
+	var avgUploadSpeedBps float64
+	var peakUploadSpeedBps float64
+	var finalStableSpeedBps float64
+	var uploadBytes int64
+	var serverConfirmedBytes int64
+	var serverConfirmedRatio float64
 
 	startTime := time.Now()
-	var peakSpeedBps float64
-	var lastSpeedBps float64
 
-	// Throttled speed callback dispatch (100-200ms)
-	targetServer.Context.SetCallbackUpload(func(rate speedtest.ByteRate) {
-		currentBps := float64(rate) * 8.0
-		lastSpeedBps = currentBps
-		if currentBps > peakSpeedBps {
-			peakSpeedBps = currentBps
+	// ----------------------------------------------------
+	// DOWNLOAD PHASE (if testMode is "download" or "both")
+	// ----------------------------------------------------
+	if testMode == "download" || testMode == "both" {
+		if ctx.Err() != nil {
+			s.transition(StateCancelled, sessionID, "Test cancelled", 0, targetServer.ID)
+			return nil, ctx.Err()
 		}
 
-		now := time.Now()
-		s.mu.Lock()
-		if now.Sub(s.lastMetricTime) >= 100*time.Millisecond && s.callbacks.OnMetrics != nil && s.activeSessionID == sessionID {
-			s.lastMetricTime = now
-			elapsed := now.Sub(startTime).Seconds()
-			progress := 50.0 + (elapsed/duration.Seconds())*50.0
-			if progress > 99.0 {
-				progress = 99.0
+		s.transition(StateDownloading, sessionID, "Starting download speed test...", 35, targetServer.ID)
+
+		targetServer.Context.Reset()
+		targetServer.Context.SetCaptureTime(duration)
+		targetServer.Context.SetRateCaptureFrequency(100 * time.Millisecond)
+		targetServer.Context.SetNThread(cfg.WorkerCount)
+
+		dlStartTime := time.Now()
+		var lastDlBps float64
+
+		targetServer.Context.SetCallbackDownload(func(rate speedtest.ByteRate) {
+			currentBps := float64(rate) * 8.0
+			lastDlBps = currentBps
+			if currentBps > peakDownloadSpeedBps {
+				peakDownloadSpeedBps = currentBps
 			}
 
-			ewmaBps := float64(targetServer.Context.GetEWMAUploadRate()) * 8.0
-			transferred := targetServer.Context.GetTotalUpload()
-			confirmedBytes := targetServer.Context.GetTotalUpload()
-			ratio := targetServer.Context.GetUploadConfirmationRatio()
+			now := time.Now()
+			s.mu.Lock()
+			if now.Sub(s.lastMetricTime) >= 100*time.Millisecond && s.callbacks.OnMetrics != nil && s.activeSessionID == sessionID {
+				s.lastMetricTime = now
+				elapsed := now.Sub(dlStartTime).Seconds()
+				var progress float64
+				if testMode == "both" {
+					progress = 35.0 + (elapsed/duration.Seconds())*30.0
+				} else {
+					progress = 35.0 + (elapsed/duration.Seconds())*60.0
+				}
+				if progress > 99.0 {
+					progress = 99.0
+				}
 
-			metrics := LiveMetrics{
-				SessionID:             sessionID,
-				Timestamp:             now,
-				CurrentSpeedBps:       currentBps,
-				EWMASpeedBps:          ewmaBps,
-				PeakSpeedBps:          peakSpeedBps,
-				TransferredBytes:      transferred,
-				ServerConfirmedBytes:  confirmedBytes,
-				ServerConfirmedRatio:  ratio,
-				ElapsedSeconds:        elapsed,
-				ActiveWorkers:         activeWorkersCount,
-				ServerConfirmedNotice: "Server-confirmed data",
+				ewmaBps := float64(targetServer.Context.GetEWMADownloadRate()) * 8.0
+				transferred := targetServer.Context.GetTotalDownload()
+
+				metrics := LiveMetrics{
+					Phase:            "download",
+					SessionID:        sessionID,
+					Timestamp:        now,
+					CurrentSpeedBps:  currentBps,
+					EWMASpeedBps:     ewmaBps,
+					PeakSpeedBps:     peakDownloadSpeedBps,
+					TransferredBytes: transferred,
+					ElapsedSeconds:   now.Sub(startTime).Seconds(),
+					ActiveWorkers:    activeWorkersCount,
+					LatencyMs:        latencyMs,
+					JitterMs:         jitterMs,
+				}
+				cb := s.callbacks.OnMetrics
+				s.mu.Unlock()
+
+				cb(metrics)
+				s.transition(StateDownloading, sessionID, fmt.Sprintf("Downloading... %.1f s left", duration.Seconds()-elapsed), progress, targetServer.ID)
+			} else {
+				s.mu.Unlock()
 			}
-			cb := s.callbacks.OnMetrics
-			s.mu.Unlock()
+		})
 
-			cb(metrics)
-			s.transition(StateUploading, sessionID, fmt.Sprintf("Uploading... %.1f s left", duration.Seconds()-elapsed), progress, targetServer.ID)
-		} else {
-			s.mu.Unlock()
+		dlErr := targetServer.DownloadTestContext(ctx)
+		if ctx.Err() != nil {
+			s.transition(StateCancelled, sessionID, "Test cancelled", 0, targetServer.ID)
+			return nil, ctx.Err()
 		}
-	})
+		if dlErr != nil {
+			mappedErr := s.mapNetworkError(dlErr)
+			s.transition(StateFailed, sessionID, mappedErr.Error(), 0, targetServer.ID)
+			return nil, mappedErr
+		}
 
-	// PURE UPLOAD TEST EXECUTION
-	// NEVER calls DownloadTest!
-	uploadErr := targetServer.UploadTestContext(ctx)
-
-	if ctx.Err() != nil {
-		s.transition(StateCancelled, sessionID, "Upload test cancelled by user", 0, targetServer.ID)
-		return nil, ctx.Err()
+		avgDownloadSpeedBps = float64(targetServer.DLSpeed) * 8.0
+		if avgDownloadSpeedBps <= 0 {
+			avgDownloadSpeedBps = lastDlBps
+		}
+		if peakDownloadSpeedBps < avgDownloadSpeedBps {
+			peakDownloadSpeedBps = avgDownloadSpeedBps
+		}
+		downloadBytes = targetServer.Context.GetTotalDownload()
 	}
 
-	if uploadErr != nil {
-		mappedErr := s.mapNetworkError(uploadErr)
-		s.transition(StateFailed, sessionID, mappedErr.Error(), 0, targetServer.ID)
-		return nil, mappedErr
+	// ----------------------------------------------------
+	// UPLOAD PHASE (if testMode is "upload" or "both")
+	// ----------------------------------------------------
+	if testMode == "upload" || testMode == "both" {
+		if ctx.Err() != nil {
+			s.transition(StateCancelled, sessionID, "Test cancelled", 0, targetServer.ID)
+			return nil, ctx.Err()
+		}
+
+		startProgress := 35.0
+		if testMode == "both" {
+			startProgress = 65.0
+		}
+		s.transition(StateUploading, sessionID, "Starting upload speed test...", startProgress, targetServer.ID)
+
+		targetServer.Context.Reset()
+		targetServer.Context.SetCaptureTime(duration)
+		targetServer.Context.SetRateCaptureFrequency(100 * time.Millisecond)
+		targetServer.Context.SetNThread(cfg.WorkerCount)
+
+		ulStartTime := time.Now()
+		var lastUlBps float64
+
+		targetServer.Context.SetCallbackUpload(func(rate speedtest.ByteRate) {
+			currentBps := float64(rate) * 8.0
+			lastUlBps = currentBps
+			if currentBps > peakUploadSpeedBps {
+				peakUploadSpeedBps = currentBps
+			}
+
+			now := time.Now()
+			s.mu.Lock()
+			if now.Sub(s.lastMetricTime) >= 100*time.Millisecond && s.callbacks.OnMetrics != nil && s.activeSessionID == sessionID {
+				s.lastMetricTime = now
+				elapsed := now.Sub(ulStartTime).Seconds()
+				var progress float64
+				if testMode == "both" {
+					progress = 65.0 + (elapsed/duration.Seconds())*34.0
+				} else {
+					progress = 35.0 + (elapsed/duration.Seconds())*64.0
+				}
+				if progress > 99.0 {
+					progress = 99.0
+				}
+
+				ewmaBps := float64(targetServer.Context.GetEWMAUploadRate()) * 8.0
+				transferred := downloadBytes + targetServer.Context.GetTotalUpload()
+				confirmedBytes := targetServer.Context.GetTotalUpload()
+				ratio := targetServer.Context.GetUploadConfirmationRatio()
+
+				metrics := LiveMetrics{
+					Phase:                 "upload",
+					SessionID:             sessionID,
+					Timestamp:             now,
+					CurrentSpeedBps:       currentBps,
+					EWMASpeedBps:          ewmaBps,
+					PeakSpeedBps:          peakUploadSpeedBps,
+					TransferredBytes:      transferred,
+					ServerConfirmedBytes:  confirmedBytes,
+					ServerConfirmedRatio:  ratio,
+					ElapsedSeconds:        now.Sub(startTime).Seconds(),
+					ActiveWorkers:         activeWorkersCount,
+					ServerConfirmedNotice: "Server-confirmed data",
+					LatencyMs:             latencyMs,
+					JitterMs:              jitterMs,
+				}
+				cb := s.callbacks.OnMetrics
+				s.mu.Unlock()
+
+				cb(metrics)
+				s.transition(StateUploading, sessionID, fmt.Sprintf("Uploading... %.1f s left", duration.Seconds()-elapsed), progress, targetServer.ID)
+			} else {
+				s.mu.Unlock()
+			}
+		})
+
+		ulErr := targetServer.UploadTestContext(ctx)
+		if ctx.Err() != nil {
+			s.transition(StateCancelled, sessionID, "Test cancelled", 0, targetServer.ID)
+			return nil, ctx.Err()
+		}
+		if ulErr != nil {
+			mappedErr := s.mapNetworkError(ulErr)
+			s.transition(StateFailed, sessionID, mappedErr.Error(), 0, targetServer.ID)
+			return nil, mappedErr
+		}
+
+		finalStableSpeedBps = lastUlBps
+		avgUploadSpeedBps = float64(targetServer.ULSpeed) * 8.0
+		if avgUploadSpeedBps <= 0 {
+			avgUploadSpeedBps = lastUlBps
+		}
+		if peakUploadSpeedBps < avgUploadSpeedBps {
+			peakUploadSpeedBps = avgUploadSpeedBps
+		}
+		uploadBytes = targetServer.Context.GetTotalUpload()
+		serverConfirmedBytes = uploadBytes
+		serverConfirmedRatio = targetServer.Context.GetUploadConfirmationRatio()
 	}
 
-	// Test completed successfully
-	finalStableBps := lastSpeedBps
-	avgSpeedBps := float64(targetServer.ULSpeed) * 8.0
-	if avgSpeedBps <= 0 {
-		avgSpeedBps = lastSpeedBps
-	}
-	if peakSpeedBps < avgSpeedBps {
-		peakSpeedBps = avgSpeedBps
-	}
-
-	elapsed := time.Since(startTime).Seconds()
-	transferredBytes := targetServer.Context.GetTotalUpload()
-	confirmedBytes := targetServer.Context.GetTotalUpload()
-	confirmedRatio := targetServer.Context.GetUploadConfirmationRatio()
+	elapsedTotal := time.Since(startTime).Seconds()
+	totalTransferredBytes := downloadBytes + uploadBytes
 
 	result := &TestResult{
 		SessionID:            sessionID,
 		Success:              true,
 		Server:               s.serverToInfo(targetServer),
-		AvgUploadSpeedBps:    avgSpeedBps,
-		PeakUploadSpeedBps:   peakSpeedBps,
-		FinalStableSpeedBps:  finalStableBps,
-		DurationSeconds:      elapsed,
-		TransferredBytes:     transferredBytes,
-		ServerConfirmedBytes: confirmedBytes,
-		ServerConfirmedRatio: confirmedRatio,
-		LatencyMs:            targetServer.Latency.Milliseconds(),
+		TestMode:             testMode,
+		AvgDownloadSpeedBps:  avgDownloadSpeedBps,
+		PeakDownloadSpeedBps: peakDownloadSpeedBps,
+		AvgUploadSpeedBps:    avgUploadSpeedBps,
+		PeakUploadSpeedBps:   peakUploadSpeedBps,
+		FinalStableSpeedBps:  finalStableSpeedBps,
+		DurationSeconds:      elapsedTotal,
+		DownloadBytes:        downloadBytes,
+		UploadBytes:          uploadBytes,
+		TransferredBytes:     totalTransferredBytes,
+		ServerConfirmedBytes: serverConfirmedBytes,
+		ServerConfirmedRatio: serverConfirmedRatio,
+		LatencyMs:            latencyMs,
+		JitterMs:             jitterMs,
+		MinLatencyMs:         targetServer.MinLatency.Milliseconds(),
+		MaxLatencyMs:         targetServer.MaxLatency.Milliseconds(),
 		ExecutionTimeStr:     time.Now().Format("2006-01-02 15:04:05"),
 		Timestamp:            time.Now(),
 		Protocol:             cfg.Protocol,
 	}
 
-	// Clean up context and counters
 	targetServer.Context.Reset()
 
-	s.transition(StateCompleted, sessionID, "Upload test completed successfully", 100, targetServer.ID)
+	s.transition(StateCompleted, sessionID, "Speed test completed successfully", 100, targetServer.ID)
 	return result, nil
 }
 
@@ -599,6 +758,9 @@ func (s *Service) serverToInfo(srv *speedtest.Server) ServerInfo {
 		City:        srv.Name,
 		Distance:    srv.Distance,
 		LatencyMs:   srv.Latency.Milliseconds(),
+		JitterMs:    float64(srv.Jitter.Nanoseconds()) / 1e6,
+		MinLatency:  srv.MinLatency.Milliseconds(),
+		MaxLatency:  srv.MaxLatency.Milliseconds(),
 		URL:         srv.URL,
 		Host:        srv.Host,
 		Available:   true,

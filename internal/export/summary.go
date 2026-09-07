@@ -15,21 +15,35 @@ func GenerateResultSummary(rec history.Record, includeServerDetails bool, maskSe
 	sb.WriteString("=== UploadPulse Speed Test ===\n")
 	sb.WriteString(fmt.Sprintf("Date & Time: %s\n", rec.Timestamp.Local().Format(time.RFC1123)))
 
+	mode := rec.TestMode
+	if mode == "" {
+		mode = "upload"
+	}
+	sb.WriteString(fmt.Sprintf("Test Mode: %s\n", strings.ToUpper(mode)))
+
 	if !rec.Success {
 		sb.WriteString(fmt.Sprintf("Status: Failed (%s)\n", rec.ErrorMessage))
 		return sb.String()
 	}
 
-	sb.WriteString(fmt.Sprintf("Average Upload: %s\n", FormatSpeed(rec.AvgUploadSpeedBps, speedUnit, decimalPrecision)))
-	sb.WriteString(fmt.Sprintf("Peak Upload: %s\n", FormatSpeed(rec.PeakUploadSpeedBps, speedUnit, decimalPrecision)))
+	if mode == "both" || mode == "download" {
+		sb.WriteString(fmt.Sprintf("Average Download: %s\n", FormatSpeed(rec.AvgDownloadSpeedBps, speedUnit, decimalPrecision)))
+		sb.WriteString(fmt.Sprintf("Peak Download: %s\n", FormatSpeed(rec.PeakDownloadSpeedBps, speedUnit, decimalPrecision)))
+	}
 
-	if rec.FinalStableSpeedBps > 0 {
-		sb.WriteString(fmt.Sprintf("Final Stable Speed: %s\n", FormatSpeed(rec.FinalStableSpeedBps, speedUnit, decimalPrecision)))
-	} else {
-		sb.WriteString("Final Stable Speed: Unavailable\n")
+	if mode == "both" || mode == "upload" {
+		sb.WriteString(fmt.Sprintf("Average Upload: %s\n", FormatSpeed(rec.AvgUploadSpeedBps, speedUnit, decimalPrecision)))
+		sb.WriteString(fmt.Sprintf("Peak Upload: %s\n", FormatSpeed(rec.PeakUploadSpeedBps, speedUnit, decimalPrecision)))
+
+		if rec.FinalStableSpeedBps > 0 {
+			sb.WriteString(fmt.Sprintf("Final Stable Speed: %s\n", FormatSpeed(rec.FinalStableSpeedBps, speedUnit, decimalPrecision)))
+		} else {
+			sb.WriteString("Final Stable Speed: Unavailable\n")
+		}
 	}
 
 	sb.WriteString(fmt.Sprintf("Latency: %d ms\n", rec.LatencyMs))
+	sb.WriteString(fmt.Sprintf("Jitter: %.2f ms\n", rec.JitterMs))
 	sb.WriteString(fmt.Sprintf("Test Duration: %.1f seconds\n", rec.DurationSeconds))
 	sb.WriteString(fmt.Sprintf("Total Transmitted Data: %s\n", FormatTransferredBytes(rec.TransferredBytes)))
 
@@ -37,7 +51,7 @@ func GenerateResultSummary(rec history.Record, includeServerDetails bool, maskSe
 		sb.WriteString(fmt.Sprintf("Server-confirmed data: %s (%.1f%%)\n",
 			FormatTransferredBytes(rec.ServerConfirmedBytes),
 			rec.ServerConfirmedRatio*100))
-	} else {
+	} else if mode == "upload" || mode == "both" {
 		sb.WriteString("Server-confirmed data: Unavailable\n")
 	}
 

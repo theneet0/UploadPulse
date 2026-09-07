@@ -178,24 +178,35 @@ func (a *App) CopySummary(recordID string, includeServer bool) (string, error) {
 				Timestamp:            last.Timestamp,
 				Success:              last.Success,
 				ErrorMessage:         last.ErrorMessage,
+				TestMode:             last.TestMode,
+				AvgDownloadSpeedBps:  last.AvgDownloadSpeedBps,
+				PeakDownloadSpeedBps: last.PeakDownloadSpeedBps,
 				AvgUploadSpeedBps:    last.AvgUploadSpeedBps,
 				PeakUploadSpeedBps:   last.PeakUploadSpeedBps,
 				FinalStableSpeedBps:  last.FinalStableSpeedBps,
 				DurationSeconds:      last.DurationSeconds,
+				DownloadBytes:        last.DownloadBytes,
+				UploadBytes:          last.UploadBytes,
 				TransferredBytes:     last.TransferredBytes,
 				ServerConfirmedBytes: last.ServerConfirmedBytes,
 				ServerConfirmedRatio: last.ServerConfirmedRatio,
 				LatencyMs:            last.LatencyMs,
+				JitterMs:             last.JitterMs,
+				MinLatencyMs:         last.MinLatencyMs,
+				MaxLatencyMs:         last.MaxLatencyMs,
 				ClientIP:             last.ClientIP,
 				Server: history.ServerSnapshot{
-					ID:       last.Server.ID,
-					Name:     last.Server.Name,
-					Sponsor:  last.Server.Sponsor,
-					Country:  last.Server.Country,
-					City:     last.Server.City,
-					Distance: last.Server.Distance,
-					Latency:  last.Server.LatencyMs,
-					Host:     last.Server.Host,
+					ID:         last.Server.ID,
+					Name:       last.Server.Name,
+					Sponsor:    last.Server.Sponsor,
+					Country:    last.Server.Country,
+					City:       last.Server.City,
+					Distance:   last.Server.Distance,
+					Latency:    last.Server.LatencyMs,
+					JitterMs:   last.Server.JitterMs,
+					MinLatency: last.Server.MinLatency,
+					MaxLatency: last.Server.MaxLatency,
+					Host:       last.Server.Host,
 				},
 				EffectiveSettings: a.GetSettings().Network,
 			}
@@ -238,15 +249,33 @@ func (a *App) ValidateCustomServer(customURL string) (*speedtestservice.ServerIn
 	return a.speedtestSvc.ValidateAndPrepareCustomServer(customURL, cfg)
 }
 
-// StartTest initiates an upload speed measurement.
-// Strictly NEVER executes download speed tests.
+// StartDownloadTest initiates a download-only speed test.
+func (a *App) StartDownloadTest() (*speedtestservice.TestResult, error) {
+	curSettings := a.GetSettings()
+	curSettings.Network.TestMode = "download"
+	return a.runSpeedTest(curSettings.Network)
+}
+
+// StartUploadTest initiates an upload-only speed test.
+func (a *App) StartUploadTest() (*speedtestservice.TestResult, error) {
+	curSettings := a.GetSettings()
+	curSettings.Network.TestMode = "upload"
+	return a.runSpeedTest(curSettings.Network)
+}
+
+// StartTest initiates a speed measurement based on user configured TestMode ("both", "download", or "upload").
 func (a *App) StartTest() (*speedtestservice.TestResult, error) {
+	curSettings := a.GetSettings()
+	return a.runSpeedTest(curSettings.Network)
+}
+
+func (a *App) runSpeedTest(netCfg settings.NetworkSettings) (*speedtestservice.TestResult, error) {
 	if a.speedtestSvc == nil {
 		return nil, fmt.Errorf("speedtest service not initialized")
 	}
 
 	curSettings := a.GetSettings()
-	res, err := a.speedtestSvc.StartUploadTest(curSettings.Network)
+	res, err := a.speedtestSvc.StartTest(netCfg)
 	if err != nil {
 		return nil, err
 	}
@@ -261,37 +290,60 @@ func (a *App) StartTest() (*speedtestservice.TestResult, error) {
 			ID:                   res.SessionID,
 			Timestamp:            res.Timestamp,
 			Success:              true,
+			TestMode:             res.TestMode,
+			AvgDownloadSpeedBps:  res.AvgDownloadSpeedBps,
+			PeakDownloadSpeedBps: res.PeakDownloadSpeedBps,
 			AvgUploadSpeedBps:    res.AvgUploadSpeedBps,
 			PeakUploadSpeedBps:   res.PeakUploadSpeedBps,
 			FinalStableSpeedBps:  res.FinalStableSpeedBps,
 			DurationSeconds:      res.DurationSeconds,
+			DownloadBytes:        res.DownloadBytes,
+			UploadBytes:          res.UploadBytes,
 			TransferredBytes:     res.TransferredBytes,
 			ServerConfirmedBytes: res.ServerConfirmedBytes,
 			ServerConfirmedRatio: res.ServerConfirmedRatio,
 			LatencyMs:            res.LatencyMs,
+			JitterMs:             res.JitterMs,
+			MinLatencyMs:         res.MinLatencyMs,
+			MaxLatencyMs:         res.MaxLatencyMs,
 			ClientIP:             res.ClientIP,
 			ISP:                  res.ISP,
 			Server: history.ServerSnapshot{
-				ID:       res.Server.ID,
-				Name:     res.Server.Name,
-				Sponsor:  res.Server.Sponsor,
-				Country:  res.Server.Country,
-				City:     res.Server.City,
-				Distance: res.Server.Distance,
-				Latency:  res.Server.LatencyMs,
-				Host:     res.Server.Host,
+				ID:         res.Server.ID,
+				Name:       res.Server.Name,
+				Sponsor:    res.Server.Sponsor,
+				Country:    res.Server.Country,
+				City:       res.Server.City,
+				Distance:   res.Server.Distance,
+				Latency:    res.Server.LatencyMs,
+				JitterMs:   res.Server.JitterMs,
+				MinLatency: res.Server.MinLatency,
+				MaxLatency: res.Server.MaxLatency,
+				Host:       res.Server.Host,
 			},
-			EffectiveSettings: curSettings.Network,
+			EffectiveSettings: netCfg,
 		}
 		_ = a.historyMgr.AddRecord(rec, curSettings.History)
 	}
 
 	// Show Windows desktop notification if enabled
 	if curSettings.Display.CompletionNotification && a.ctx != nil {
-		speedStr := export.FormatSpeed(res.AvgUploadSpeedBps, curSettings.Display.SpeedUnit, curSettings.Display.DecimalPrecision)
+		var msg string
+		dlStr := export.FormatSpeed(res.AvgDownloadSpeedBps, curSettings.Display.SpeedUnit, curSettings.Display.DecimalPrecision)
+		ulStr := export.FormatSpeed(res.AvgUploadSpeedBps, curSettings.Display.SpeedUnit, curSettings.Display.DecimalPrecision)
+
+		switch res.TestMode {
+		case "download":
+			msg = fmt.Sprintf("Download: %s | Ping: %d ms | Jitter: %.1f ms", dlStr, res.LatencyMs, res.JitterMs)
+		case "upload":
+			msg = fmt.Sprintf("Upload: %s | Ping: %d ms | Jitter: %.1f ms", ulStr, res.LatencyMs, res.JitterMs)
+		default:
+			msg = fmt.Sprintf("Down: %s | Up: %s | Ping: %d ms | Jitter: %.1f ms", dlStr, ulStr, res.LatencyMs, res.JitterMs)
+		}
+
 		wailsRuntime.EventsEmit(a.ctx, "app:notify", map[string]string{
-			"title":   "UploadPulse Test Completed",
-			"message": fmt.Sprintf("Upload Speed: %s (Latency: %d ms)", speedStr, res.LatencyMs),
+			"title":   "UploadPulse Speed Test Completed",
+			"message": msg,
 		})
 	}
 

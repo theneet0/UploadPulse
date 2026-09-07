@@ -19,6 +19,9 @@ func GenerateCSV(records []history.Record, maskSensitive bool, speedUnit string,
 		"ID",
 		"Timestamp (UTC)",
 		"Status",
+		"Test Mode",
+		fmt.Sprintf("Avg Download Speed (%s)", speedUnit),
+		fmt.Sprintf("Peak Download Speed (%s)", speedUnit),
 		fmt.Sprintf("Avg Upload Speed (%s)", speedUnit),
 		fmt.Sprintf("Peak Upload Speed (%s)", speedUnit),
 		fmt.Sprintf("Final Stable Speed (%s)", speedUnit),
@@ -27,6 +30,7 @@ func GenerateCSV(records []history.Record, maskSensitive bool, speedUnit string,
 		"Server-confirmed Data",
 		"Confirmation Ratio (%)",
 		"Latency (ms)",
+		"Jitter (ms)",
 		"Server ID",
 		"Server Name",
 		"Server Sponsor",
@@ -56,10 +60,18 @@ func GenerateCSV(records []history.Record, maskSensitive bool, speedUnit string,
 			clientIP = MaskIP(clientIP)
 		}
 
+		mode := r.TestMode
+		if mode == "" {
+			mode = "upload"
+		}
+
 		row := []string{
 			SanitizeCSVFormula(r.ID),
 			SanitizeCSVFormula(r.Timestamp.UTC().Format(time.RFC3339)),
 			SanitizeCSVFormula(status),
+			SanitizeCSVFormula(mode),
+			SanitizeCSVFormula(FormatSpeed(r.AvgDownloadSpeedBps, speedUnit, decimalPrecision)),
+			SanitizeCSVFormula(FormatSpeed(r.PeakDownloadSpeedBps, speedUnit, decimalPrecision)),
 			SanitizeCSVFormula(FormatSpeed(r.AvgUploadSpeedBps, speedUnit, decimalPrecision)),
 			SanitizeCSVFormula(FormatSpeed(r.PeakUploadSpeedBps, speedUnit, decimalPrecision)),
 			SanitizeCSVFormula(FormatSpeed(r.FinalStableSpeedBps, speedUnit, decimalPrecision)),
@@ -68,6 +80,7 @@ func GenerateCSV(records []history.Record, maskSensitive bool, speedUnit string,
 			SanitizeCSVFormula(FormatTransferredBytes(r.ServerConfirmedBytes)),
 			SanitizeCSVFormula(fmt.Sprintf("%.1f", r.ServerConfirmedRatio*100)),
 			SanitizeCSVFormula(fmt.Sprintf("%d", r.LatencyMs)),
+			SanitizeCSVFormula(fmt.Sprintf("%.2f", r.JitterMs)),
 			SanitizeCSVFormula(r.Server.ID),
 			SanitizeCSVFormula(r.Server.Name),
 			SanitizeCSVFormula(r.Server.Sponsor),

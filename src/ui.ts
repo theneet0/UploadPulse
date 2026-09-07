@@ -20,13 +20,18 @@ export class AppUI {
     instantaneousSpeedBps: 0,
     peakSpeedBps: 0,
     averageSpeedBps: 0,
+    avgDownloadSpeedBps: 0,
+    avgUploadSpeedBps: 0,
     transferredBytes: 0,
+    downloadBytes: 0,
+    uploadBytes: 0,
     serverConfirmedBytes: 0,
     serverConfirmedRatio: 1,
     elapsedSeconds: 0,
     estimatedRemainingSeconds: 0,
     activeWorkers: 8,
     latencyMs: 0,
+    jitterMs: 0,
   };
 
   private liveChart: LiveChart | null = null;
@@ -52,6 +57,7 @@ export class AppUI {
       this.isTesting =
         stateInfo.state === 'discovering_servers' ||
         stateInfo.state === 'measuring_latency' ||
+        stateInfo.state === 'downloading' ||
         stateInfo.state === 'uploading';
 
       this.updateStateBanner();
@@ -78,7 +84,10 @@ export class AppUI {
     return this.locale.strings[key] || key;
   }
 
-  private formatSpeed(bps: number): string {
+  private formatSpeed(bps?: number): string {
+    if (bps === undefined || bps === null || bps <= 0) {
+      return `-- ${this.settings.display.speedUnit}`;
+    }
     const unit = this.settings.display.speedUnit || 'Mbps';
     const prec = this.settings.display.decimalPrecision ?? 2;
     let val = 0;
@@ -91,6 +100,9 @@ export class AppUI {
         break;
       case 'kBps':
         val = bps / 8000;
+        break;
+      case 'Gbps':
+        val = bps / 1000000000;
         break;
       case 'Mbps':
       default:
@@ -246,7 +258,7 @@ export class AppUI {
   }
 
   // ----------------------------------------------------------------------
-  // VIEW: Upload Test (Geometric Balance Central Gauge)
+  // VIEW: Speed Test (Geometric Balance Central Gauge with Multi-Mode)
   // ----------------------------------------------------------------------
   private renderTestView(viewport: HTMLElement) {
     const activeServerName =
@@ -256,8 +268,39 @@ export class AppUI {
         ? `Server ID ${this.settings.network.selectedServerID}`
         : 'Frankfurt, Germany - CoreBackbone';
 
+    const currentMode = this.settings.network.testMode || 'both';
+
     viewport.innerHTML = `
       <div class="max-w-4xl mx-auto w-full flex flex-col items-center justify-center space-y-6 my-auto">
+        
+        <!-- Top Mode Selector Segmented Control -->
+        <div class="flex items-center p-1 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs gap-1 shadow-inner">
+          <button id="btn-mode-both" class="px-4 py-2 rounded-lg font-medium transition flex items-center gap-2 ${
+            currentMode === 'both'
+              ? 'bg-[#60cdff] text-black shadow font-semibold'
+              : 'text-[#a0a0a0] hover:text-white hover:bg-white/5'
+          }">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 16V4m0 0L3 8m4-4l4 4m6 4v12m0 0l4-4m-4 4l-4-4"/></svg>
+            <span>${this.t('mode_both')}</span>
+          </button>
+          <button id="btn-mode-download" class="px-4 py-2 rounded-lg font-medium transition flex items-center gap-2 ${
+            currentMode === 'download'
+              ? 'bg-[#60cdff] text-black shadow font-semibold'
+              : 'text-[#a0a0a0] hover:text-white hover:bg-white/5'
+          }">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v16m0 0l-6-6m6 6l6-6"/></svg>
+            <span>${this.t('mode_download')}</span>
+          </button>
+          <button id="btn-mode-upload" class="px-4 py-2 rounded-lg font-medium transition flex items-center gap-2 ${
+            currentMode === 'upload'
+              ? 'bg-[#60cdff] text-black shadow font-semibold'
+              : 'text-[#a0a0a0] hover:text-white hover:bg-white/5'
+          }">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V4m0 0l-6 6m6-6l6 6"/></svg>
+            <span>${this.t('mode_upload')}</span>
+          </button>
+        </div>
+
         <!-- Status Badge -->
         <div id="status-badge" class="status-badge tracking-wider uppercase">
           ${this.currentState.message ? this.currentState.message.toUpperCase() : this.t('state_idle').toUpperCase()}
@@ -272,7 +315,22 @@ export class AppUI {
           </svg>
 
           <!-- Gauge Inner Values -->
-          <div class="flex flex-col items-center justify-center z-10 text-center">
+          <div class="flex flex-col items-center justify-center z-10 text-center px-4">
+            <div id="meter-phase-label" class="text-[11px] font-bold uppercase tracking-widest text-[#60cdff] mb-0.5">
+              ${
+                this.currentState.state === 'downloading'
+                  ? 'DOWNLOADING'
+                  : this.currentState.state === 'uploading'
+                  ? 'UPLOADING'
+                  : this.currentState.state === 'measuring_latency'
+                  ? 'LATENCY & JITTER'
+                  : currentMode === 'download'
+                  ? 'DOWNLOAD TEST'
+                  : currentMode === 'upload'
+                  ? 'UPLOAD TEST'
+                  : 'DUAL BENCHMARK'
+              }
+            </div>
             <div id="meter-current-speed" class="speed-value">0.00</div>
             <div id="meter-unit" class="speed-unit">${this.settings.display.speedUnit}</div>
           </div>
@@ -297,26 +355,94 @@ export class AppUI {
           </button>
         </div>
 
-        <!-- Metric Group: 3 Clean Geometric Cards -->
-        <div class="grid grid-cols-3 gap-3 w-full max-w-2xl">
-          <div class="metric-card">
-            <div class="metric-label">${this.t('meter_latency')}</div>
-            <div id="meter-latency-val" class="metric-value text-[#60cdff]">
+        <!-- Metric Group: 4 Clean Geometric Cards (Download, Upload, Latency, Jitter) -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full max-w-2xl">
+          <!-- Download Card -->
+          <div class="metric-card flex flex-col justify-between">
+            <div class="flex items-center justify-between text-xs text-[#a0a0a0]">
+              <span class="font-medium flex items-center gap-1.5">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" class="text-amber-400"><path d="M12 4v16m0 0l-6-6m6 6l6-6"/></svg>
+                ${this.t('meter_download')}
+              </span>
+            </div>
+            <div id="meter-download-speed" class="metric-value text-amber-400 text-lg font-mono my-1">
+              -- ${this.settings.display.speedUnit}
+            </div>
+            <div id="meter-download-peak" class="text-[10px] text-[#a0a0a0] font-mono">
+              Peak: --
+            </div>
+          </div>
+
+          <!-- Upload Card -->
+          <div class="metric-card flex flex-col justify-between">
+            <div class="flex items-center justify-between text-xs text-[#a0a0a0]">
+              <span class="font-medium flex items-center gap-1.5">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" class="text-[#60cdff]"><path d="M12 20V4m0 0l-6 6m6-6l6 6"/></svg>
+                ${this.t('meter_upload')}
+              </span>
+            </div>
+            <div id="meter-upload-speed" class="metric-value text-[#60cdff] text-lg font-mono my-1">
+              -- ${this.settings.display.speedUnit}
+            </div>
+            <div id="meter-upload-peak" class="text-[10px] text-[#a0a0a0] font-mono">
+              Peak: --
+            </div>
+          </div>
+
+          <!-- Latency Card -->
+          <div class="metric-card flex flex-col justify-between">
+            <div class="flex items-center justify-between text-xs text-[#a0a0a0]">
+              <span class="font-medium flex items-center gap-1.5">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" class="text-emerald-400"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                ${this.t('meter_latency')}
+              </span>
+            </div>
+            <div id="meter-latency-val" class="metric-value text-emerald-400 text-lg font-mono my-1">
               ${this.currentMetrics.latencyMs ? this.currentMetrics.latencyMs + ' ms' : '-- ms'}
             </div>
-          </div>
-
-          <div class="metric-card">
-            <div class="metric-label">${this.t('meter_peak')}</div>
-            <div id="meter-peak-speed" class="metric-value">
-              0.00 ${this.settings.display.speedUnit}
+            <div id="meter-latency-range" class="text-[10px] text-[#a0a0a0] font-mono">
+              ${this.currentMetrics.minLatencyMs ? `Min: ${this.currentMetrics.minLatencyMs}ms` : 'Min/Max: --'}
             </div>
           </div>
 
-          <div class="metric-card">
-            <div class="metric-label">Data Sent (Verified)</div>
-            <div id="meter-data-sent" class="metric-value">
-              0.0 MB
+          <!-- Jitter Card -->
+          <div class="metric-card flex flex-col justify-between">
+            <div class="flex items-center justify-between text-xs text-[#a0a0a0]">
+              <span class="font-medium flex items-center gap-1.5">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" class="text-purple-400"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                ${this.t('meter_jitter')}
+              </span>
+            </div>
+            <div id="meter-jitter-val" class="metric-value text-purple-400 text-lg font-mono my-1">
+              ${this.currentMetrics.jitterMs !== undefined ? this.currentMetrics.jitterMs + ' ms' : '-- ms'}
+            </div>
+            <div id="meter-jitter-quality" class="text-[10px] text-purple-300/80 font-mono">
+              ${this.currentMetrics.jitterMs !== undefined ? (this.currentMetrics.jitterMs < 5 ? 'Excellent' : this.currentMetrics.jitterMs < 15 ? 'Good' : 'Fair') : 'Stability'}
+            </div>
+          </div>
+        </div>
+
+        <!-- Transferred Volume & Flow Summary Card -->
+        <div class="w-full max-w-2xl grid grid-cols-3 gap-2 px-4 py-3 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs">
+          <div class="text-center">
+            <div class="text-[10px] text-[#a0a0a0] uppercase tracking-wider">Downloaded</div>
+            <div id="meter-data-down" class="font-mono text-white/90 font-medium mt-0.5">
+              ${this.formatBytes(this.currentMetrics.downloadBytes || 0)}
+            </div>
+          </div>
+          <div class="text-center border-x border-white/10">
+            <div class="text-[10px] text-[#a0a0a0] uppercase tracking-wider">Uploaded</div>
+            <div id="meter-data-up" class="font-mono text-white/90 font-medium mt-0.5">
+              ${this.formatBytes(this.currentMetrics.uploadBytes || this.currentMetrics.serverConfirmedBytes || 0)}
+            </div>
+          </div>
+          <div class="text-center">
+            <div class="text-[10px] text-[#a0a0a0] uppercase tracking-wider">Total Volume</div>
+            <div id="meter-data-total" class="font-mono text-white/90 font-medium mt-0.5">
+              ${this.formatBytes(
+                (this.currentMetrics.downloadBytes || 0) +
+                  (this.currentMetrics.uploadBytes || this.currentMetrics.serverConfirmedBytes || 0)
+              )}
             </div>
           </div>
         </div>
@@ -349,14 +475,14 @@ export class AppUI {
           </div>
           <div class="flex-1 min-w-0">
             <div class="text-sm font-medium text-white truncate">${activeServerName}</div>
-            <div class="text-xs text-[#a0a0a0] truncate">Pure Upload Pipe &bull; ${this.settings.network.workerCount || 8} Active Connections ${this.settings.network.proxyURL ? '&bull; Via SOCKS5' : ''}</div>
+            <div class="text-xs text-[#a0a0a0] truncate">Mode: ${currentMode.toUpperCase()} &bull; ${this.settings.network.workerCount || 8} Active Connections ${this.settings.network.proxyURL ? '&bull; Via SOCKS5' : ''}</div>
           </div>
           <div class="text-right shrink-0">
             <span class="text-xs font-mono px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Verified</span>
           </div>
         </div>
 
-        <!-- Live Upload Chart Container -->
+        <!-- Live Upload / Download Chart Container -->
         <div id="chart-panel" class="w-full max-w-2xl h-44 rounded-lg bg-white/[0.02] border border-white/[0.08] p-3 flex flex-col ${this.settings.display.showLiveChart ? '' : 'hidden'}">
           <div class="flex items-center justify-between text-[11px] text-[#a0a0a0] mb-2 px-1">
             <span class="font-medium text-white/80">Live Throughput Stream</span>
@@ -366,6 +492,22 @@ export class AppUI {
         </div>
       </div>
     `;
+
+    // Mode Selector Buttons
+    const btnModeBoth = document.getElementById('btn-mode-both');
+    const btnModeDown = document.getElementById('btn-mode-download');
+    const btnModeUp = document.getElementById('btn-mode-upload');
+
+    const switchMode = async (m: 'both' | 'download' | 'upload') => {
+      this.settings.network.testMode = m;
+      await Bridge.updateSettings(this.settings);
+      this.renderTestView(viewport);
+      this.showToast(`Test mode switched to ${m.toUpperCase()}`, 'info');
+    };
+
+    if (btnModeBoth) btnModeBoth.onclick = () => switchMode('both');
+    if (btnModeDown) btnModeDown.onclick = () => switchMode('download');
+    if (btnModeUp) btnModeUp.onclick = () => switchMode('upload');
 
     // Initialize chart if visible
     if (this.settings.display.showLiveChart) {
@@ -385,7 +527,14 @@ export class AppUI {
         } else {
           if (this.liveChart) this.liveChart.clear();
           try {
-            await Bridge.startTest();
+            const mode = this.settings.network.testMode || 'both';
+            if (mode === 'download') {
+              await Bridge.startDownloadTest();
+            } else if (mode === 'upload') {
+              await Bridge.startUploadTest();
+            } else {
+              await Bridge.startTest();
+            }
           } catch (err: any) {
             this.showToast(`Error starting test: ${err?.message || err}`, 'error');
           }
@@ -432,6 +581,27 @@ export class AppUI {
         : this.t('state_idle').toUpperCase();
     }
 
+    const phaseLabel = document.getElementById('meter-phase-label');
+    if (phaseLabel) {
+      const mode = this.settings.network.testMode || 'both';
+      if (this.currentState.state === 'downloading') {
+        phaseLabel.textContent = 'DOWNLOADING';
+        phaseLabel.className = 'text-[11px] font-bold uppercase tracking-widest text-amber-400 mb-0.5';
+      } else if (this.currentState.state === 'uploading') {
+        phaseLabel.textContent = 'UPLOADING';
+        phaseLabel.className = 'text-[11px] font-bold uppercase tracking-widest text-[#60cdff] mb-0.5';
+      } else if (this.currentState.state === 'measuring_latency') {
+        phaseLabel.textContent = 'LATENCY & JITTER';
+        phaseLabel.className = 'text-[11px] font-bold uppercase tracking-widest text-purple-400 mb-0.5';
+      } else if (this.currentState.state === 'completed') {
+        phaseLabel.textContent = 'TEST COMPLETED';
+        phaseLabel.className = 'text-[11px] font-bold uppercase tracking-widest text-emerald-400 mb-0.5';
+      } else {
+        phaseLabel.textContent = mode === 'download' ? 'DOWNLOAD TEST' : mode === 'upload' ? 'UPLOAD TEST' : 'DUAL BENCHMARK';
+        phaseLabel.className = 'text-[11px] font-bold uppercase tracking-widest text-[#60cdff] mb-0.5';
+      }
+    }
+
     const btnActionText = document.getElementById('btn-action-text');
     if (btnActionText) {
       btnActionText.textContent = this.isTesting
@@ -445,6 +615,17 @@ export class AppUI {
       const progress = this.currentState.progressPercent || 0;
       const offset = totalLen - (progress / 100) * totalLen;
       progressCircle.style.strokeDashoffset = `${offset}`;
+
+      // Colorize circle based on phase
+      if (this.currentState.state === 'downloading') {
+        progressCircle.setAttribute('stroke', '#fbbf24'); // amber
+      } else if (this.currentState.state === 'uploading') {
+        progressCircle.setAttribute('stroke', '#60cdff'); // blue
+      } else if (this.currentState.state === 'measuring_latency') {
+        progressCircle.setAttribute('stroke', '#c084fc'); // purple
+      } else {
+        progressCircle.setAttribute('stroke', '#60cdff');
+      }
     }
   }
 
@@ -460,10 +641,6 @@ export class AppUI {
 
   private updateMeterValues() {
     const currEl = document.getElementById('meter-current-speed');
-    const peakEl = document.getElementById('meter-peak-speed');
-    const latEl = document.getElementById('meter-latency-val');
-    const dataSentEl = document.getElementById('meter-data-sent');
-
     const unit = this.settings.display.speedUnit;
     const prec = this.settings.display.decimalPrecision ?? 2;
 
@@ -475,20 +652,82 @@ export class AppUI {
           return (bps / 1000).toFixed(prec);
         case 'kBps':
           return (bps / 8000).toFixed(prec);
+        case 'Gbps':
+          return (bps / 1000000000).toFixed(prec);
         case 'Mbps':
         default:
           return (bps / 1000000).toFixed(prec);
       }
     };
 
-    if (currEl) currEl.textContent = toVal(this.currentMetrics.instantaneousSpeedBps);
-    if (peakEl) peakEl.textContent = `${toVal(this.currentMetrics.peakSpeedBps)} ${unit}`;
+    if (currEl) {
+      currEl.textContent = toVal(this.currentMetrics.instantaneousSpeedBps);
+    }
+
+    // Download Speed Card
+    const downSpeedEl = document.getElementById('meter-download-speed');
+    const downPeakEl = document.getElementById('meter-download-peak');
+    if (this.currentMetrics.phase === 'download' || this.currentMetrics.avgDownloadSpeedBps) {
+      if (downSpeedEl) {
+        const speedToShow =
+          this.currentMetrics.phase === 'download'
+            ? this.currentMetrics.instantaneousSpeedBps
+            : this.currentMetrics.avgDownloadSpeedBps || 0;
+        downSpeedEl.textContent = `${toVal(speedToShow)} ${unit}`;
+      }
+      if (downPeakEl && this.currentMetrics.peakSpeedBps && this.currentMetrics.phase === 'download') {
+        downPeakEl.textContent = `Peak: ${toVal(this.currentMetrics.peakSpeedBps)} ${unit}`;
+      }
+    }
+
+    // Upload Speed Card
+    const upSpeedEl = document.getElementById('meter-upload-speed');
+    const upPeakEl = document.getElementById('meter-upload-peak');
+    if (this.currentMetrics.phase === 'upload' || this.currentMetrics.avgUploadSpeedBps || this.currentMetrics.averageSpeedBps) {
+      if (upSpeedEl) {
+        const speedToShow =
+          this.currentMetrics.phase === 'upload'
+            ? this.currentMetrics.instantaneousSpeedBps
+            : this.currentMetrics.avgUploadSpeedBps || this.currentMetrics.averageSpeedBps || 0;
+        upSpeedEl.textContent = `${toVal(speedToShow)} ${unit}`;
+      }
+      if (upPeakEl && this.currentMetrics.peakSpeedBps && this.currentMetrics.phase === 'upload') {
+        upPeakEl.textContent = `Peak: ${toVal(this.currentMetrics.peakSpeedBps)} ${unit}`;
+      }
+    }
+
+    // Latency (Ping)
+    const latEl = document.getElementById('meter-latency-val');
+    const latRangeEl = document.getElementById('meter-latency-range');
     if (latEl && this.currentMetrics.latencyMs) {
       latEl.textContent = `${this.currentMetrics.latencyMs} ms`;
     }
-    if (dataSentEl) {
-      dataSentEl.textContent = `${this.formatBytes(this.currentMetrics.serverConfirmedBytes)}`;
+    if (latRangeEl && this.currentMetrics.minLatencyMs) {
+      latRangeEl.textContent = `Min: ${this.currentMetrics.minLatencyMs}ms | Max: ${this.currentMetrics.maxLatencyMs}ms`;
     }
+
+    // Jitter
+    const jitterEl = document.getElementById('meter-jitter-val');
+    const jitterQualityEl = document.getElementById('meter-jitter-quality');
+    if (jitterEl && this.currentMetrics.jitterMs !== undefined) {
+      jitterEl.textContent = `${this.currentMetrics.jitterMs} ms`;
+      if (jitterQualityEl) {
+        const j = this.currentMetrics.jitterMs;
+        jitterQualityEl.textContent = j < 5 ? 'Excellent (<5ms)' : j < 15 ? 'Good (<15ms)' : 'Moderate';
+      }
+    }
+
+    // Transferred Data
+    const dataDownEl = document.getElementById('meter-data-down');
+    const dataUpEl = document.getElementById('meter-data-up');
+    const dataTotalEl = document.getElementById('meter-data-total');
+
+    const downBytes = this.currentMetrics.downloadBytes || 0;
+    const upBytes = this.currentMetrics.uploadBytes || this.currentMetrics.serverConfirmedBytes || 0;
+
+    if (dataDownEl) dataDownEl.textContent = this.formatBytes(downBytes);
+    if (dataUpEl) dataUpEl.textContent = this.formatBytes(upBytes);
+    if (dataTotalEl) dataTotalEl.textContent = this.formatBytes(downBytes + upBytes);
   }
 
   // ----------------------------------------------------------------------
@@ -657,8 +896,8 @@ export class AppUI {
       <div class="max-w-5xl mx-auto w-full space-y-4">
         <div class="flex items-center justify-between">
           <div>
-            <h2 class="text-lg font-semibold text-white">Upload Test History</h2>
-            <p class="text-xs text-[#a0a0a0]">All historical upload records stored securely in your local %LOCALAPPDATA% directory.</p>
+            <h2 class="text-lg font-semibold text-white">Speed Test History</h2>
+            <p class="text-xs text-[#a0a0a0]">All benchmark records stored securely in your local %LOCALAPPDATA% directory.</p>
           </div>
 
           <div class="flex items-center gap-2">
@@ -678,14 +917,16 @@ export class AppUI {
 
         <!-- Filter Bar -->
         <div class="metric-card flex items-center justify-between gap-4">
-          <input id="input-history-search" type="text" class="theme-input px-3 py-1 text-xs w-64" placeholder="Search by server name, city, ID..." value="${this.historySearchQuery}"/>
+          <input id="input-history-search" type="text" class="theme-input px-3 py-1 text-xs w-64" placeholder="Search by server, city, mode..." value="${this.historySearchQuery}"/>
 
           <div class="flex items-center gap-2 text-xs text-[#a0a0a0]">
             <span>Sort by:</span>
             <select id="select-history-sort" class="theme-input px-2.5 py-1 text-xs bg-[#1c1c1c] text-white">
               <option value="date" ${this.historySortBy === 'date' ? 'selected' : ''}>Date (Newest)</option>
               <option value="speed" ${this.historySortBy === 'speed' ? 'selected' : ''}>Upload Speed</option>
+              <option value="download" ${this.historySortBy === 'download' ? 'selected' : ''}>Download Speed</option>
               <option value="latency" ${this.historySortBy === 'latency' ? 'selected' : ''}>Latency (Ping)</option>
+              <option value="jitter" ${this.historySortBy === 'jitter' ? 'selected' : ''}>Jitter</option>
             </select>
           </div>
         </div>
@@ -696,10 +937,12 @@ export class AppUI {
             <thead class="bg-white/[0.04] text-[#a0a0a0] text-[11px] uppercase tracking-wider">
               <tr>
                 <th class="p-3">Timestamp</th>
-                <th class="p-3">Avg Speed</th>
-                <th class="p-3">Peak Speed</th>
-                <th class="p-3">Confirmed Data</th>
+                <th class="p-3">Mode</th>
+                <th class="p-3">Download</th>
+                <th class="p-3">Upload</th>
                 <th class="p-3">Latency</th>
+                <th class="p-3">Jitter</th>
+                <th class="p-3">Confirmed Data</th>
                 <th class="p-3">Server</th>
                 <th class="p-3 text-right">Actions</th>
               </tr>
@@ -707,24 +950,38 @@ export class AppUI {
             <tbody class="divide-y divide-white/5">
               ${
                 this.historyList.length === 0
-                  ? `<tr><td colspan="7" class="p-8 text-center text-[#a0a0a0]">${this.t('history_empty')}</td></tr>`
+                  ? `<tr><td colspan="9" class="p-8 text-center text-[#a0a0a0]">${this.t('history_empty')}</td></tr>`
                   : this.historyList
-                      .map(
-                        (r) => `
-                <tr class="hover:bg-white/[0.02] transition">
-                  <td class="p-3 text-slate-300 font-mono text-[11px]">${new Date(r.timestamp).toLocaleString()}</td>
-                  <td class="p-3 font-semibold text-[#60cdff] font-mono">${this.formatSpeed(r.avgUploadSpeedBps)}</td>
-                  <td class="p-3 text-slate-200 font-mono">${this.formatSpeed(r.peakUploadSpeedBps)}</td>
-                  <td class="p-3 text-[#a0a0a0] font-mono text-[11px]">${this.formatBytes(r.serverConfirmedBytes)}</td>
-                  <td class="p-3 font-mono text-emerald-400">${r.latencyMs} ms</td>
-                  <td class="p-3 text-slate-200 text-[11px]">${r.server?.name || 'Auto Server'}</td>
-                  <td class="p-3 text-right space-x-2">
-                    <button class="btn-copy-rec theme-btn-secondary px-2.5 py-1 text-[11px]" data-id="${r.id}" title="Copy Result">Copy</button>
-                    <button class="btn-delete-rec theme-btn-secondary px-2 py-1 text-[11px] text-rose-400 hover:text-rose-300" data-id="${r.id}" title="Delete Record">&times;</button>
-                  </td>
-                </tr>
-              `
-                      )
+                      .map((r) => {
+                        const modeBadge =
+                          r.testMode === 'download'
+                            ? `<span class="px-2 py-0.5 text-[10px] font-medium rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">DOWN</span>`
+                            : r.testMode === 'upload'
+                            ? `<span class="px-2 py-0.5 text-[10px] font-medium rounded bg-[#60cdff]/10 text-[#60cdff] border border-[#60cdff]/20">UP</span>`
+                            : `<span class="px-2 py-0.5 text-[10px] font-medium rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">DUAL</span>`;
+
+                        const downText = r.avgDownloadSpeedBps ? this.formatSpeed(r.avgDownloadSpeedBps) : '--';
+                        const upText = r.avgUploadSpeedBps ? this.formatSpeed(r.avgUploadSpeedBps) : '--';
+
+                        return `
+                          <tr class="hover:bg-white/[0.02] transition">
+                            <td class="p-3 text-slate-300 font-mono text-[11px]">${new Date(r.timestamp).toLocaleString()}</td>
+                            <td class="p-3">${modeBadge}</td>
+                            <td class="p-3 font-semibold text-amber-400 font-mono">${downText}</td>
+                            <td class="p-3 font-semibold text-[#60cdff] font-mono">${upText}</td>
+                            <td class="p-3 font-mono text-emerald-400">${r.latencyMs} ms</td>
+                            <td class="p-3 font-mono text-purple-400">${r.jitterMs !== undefined ? r.jitterMs + ' ms' : '--'}</td>
+                            <td class="p-3 text-[#a0a0a0] font-mono text-[11px]">${this.formatBytes(
+                              (r.downloadBytes || 0) + (r.uploadBytes || r.serverConfirmedBytes || 0)
+                            )}</td>
+                            <td class="p-3 text-slate-200 text-[11px] max-w-[140px] truncate">${r.server?.name || 'Auto Server'}</td>
+                            <td class="p-3 text-right space-x-2">
+                              <button class="btn-copy-rec theme-btn-secondary px-2.5 py-1 text-[11px]" data-id="${r.id}" title="Copy Result">Copy</button>
+                              <button class="btn-delete-rec theme-btn-secondary px-2 py-1 text-[11px] text-rose-400 hover:text-rose-300" data-id="${r.id}" title="Delete Record">&times;</button>
+                            </td>
+                          </tr>
+                        `;
+                      })
                       .join('')
               }
             </tbody>
@@ -822,45 +1079,78 @@ export class AppUI {
   }
 
   // ----------------------------------------------------------------------
-  // VIEW: Settings (Geometric Balance)
+  // VIEW: Settings (Geometric Balance - Complete Customization)
   // ----------------------------------------------------------------------
   private renderSettingsView(viewport: HTMLElement) {
     viewport.innerHTML = `
-      <div class="max-w-3xl mx-auto w-full space-y-6">
+      <div class="max-w-3xl mx-auto w-full space-y-6 pb-12">
         <div>
           <h2 class="text-lg font-semibold text-white">${this.t('nav_settings')}</h2>
-          <p class="text-xs text-[#a0a0a0]">Configure measurement duration, worker connections, units, and appearance.</p>
+          <p class="text-xs text-[#a0a0a0]">Configure test engine, worker concurrency, SOCKS5 proxy, units, appearance, and history storage.</p>
         </div>
 
-        <!-- Network Settings Card -->
+        <!-- 1. Network & Engine Settings Card -->
         <div class="metric-card space-y-4">
-          <h3 class="text-xs font-bold uppercase tracking-wider text-[#60cdff]">${this.t('settings_network')}</h3>
+          <div class="flex items-center justify-between border-b border-white/5 pb-2">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-[#60cdff]">Test Engine & Network Configuration</h3>
+            <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-[#a0a0a0]">Engine Options</span>
+          </div>
 
           <div class="grid grid-cols-2 gap-4">
+            <!-- Test Mode -->
+            <div>
+              <label class="block text-xs font-medium text-[#a0a0a0] mb-1">Default Test Mode</label>
+              <select id="cfg-test-mode" class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white">
+                <option value="both" ${(this.settings.network.testMode || 'both') === 'both' ? 'selected' : ''}>Download & Upload (Dual)</option>
+                <option value="download" ${this.settings.network.testMode === 'download' ? 'selected' : ''}>Download Only</option>
+                <option value="upload" ${this.settings.network.testMode === 'upload' ? 'selected' : ''}>Upload Only</option>
+              </select>
+            </div>
+
+            <!-- Duration -->
             <div>
               <label class="block text-xs font-medium text-[#a0a0a0] mb-1">${this.t('settings_duration')}</label>
               <select id="cfg-duration" class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white">
                 <option value="5" ${this.settings.network.durationSeconds === 5 ? 'selected' : ''}>5 Seconds</option>
                 <option value="10" ${this.settings.network.durationSeconds === 10 ? 'selected' : ''}>10 Seconds</option>
-                <option value="15" ${this.settings.network.durationSeconds === 15 ? 'selected' : ''}>15 Seconds (Default)</option>
-                <option value="30" ${this.settings.network.durationSeconds === 30 ? 'selected' : ''}>30 Seconds</option>
-                <option value="60" ${this.settings.network.durationSeconds === 60 ? 'selected' : ''}>60 Seconds</option>
-              </select>
-            </div>
-
-            <div>
-              <label class="block text-xs font-medium text-[#a0a0a0] mb-1">${this.t('settings_workers')}</label>
-              <select id="cfg-workers" class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white">
-                <option value="1" ${this.settings.network.workerCount === 1 ? 'selected' : ''}>1 Connection (Saving Mode)</option>
-                <option value="4" ${this.settings.network.workerCount === 4 ? 'selected' : ''}>4 Connections</option>
-                <option value="8" ${this.settings.network.workerCount === 8 ? 'selected' : ''}>8 Connections (Default Auto)</option>
-                <option value="16" ${this.settings.network.workerCount === 16 ? 'selected' : ''}>16 Connections</option>
-                <option value="24" ${this.settings.network.workerCount === 24 ? 'selected' : ''}>24 Connections (High Throughput)</option>
+                <option value="15" ${this.settings.network.durationSeconds === 15 ? 'selected' : ''}>15 Seconds (Standard)</option>
+                <option value="20" ${this.settings.network.durationSeconds === 20 ? 'selected' : ''}>20 Seconds</option>
+                <option value="30" ${this.settings.network.durationSeconds === 30 ? 'selected' : ''}>30 Seconds (Extended)</option>
+                <option value="60" ${this.settings.network.durationSeconds === 60 ? 'selected' : ''}>60 Seconds (Heavy Stress)</option>
               </select>
             </div>
           </div>
 
           <div class="grid grid-cols-2 gap-4">
+            <!-- Worker Connections -->
+            <div>
+              <label class="block text-xs font-medium text-[#a0a0a0] mb-1">${this.t('settings_workers')}</label>
+              <select id="cfg-workers" class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white">
+                <option value="1" ${this.settings.network.workerCount === 1 ? 'selected' : ''}>1 Connection (Single-Thread / Low CPU)</option>
+                <option value="2" ${this.settings.network.workerCount === 2 ? 'selected' : ''}>2 Connections</option>
+                <option value="4" ${this.settings.network.workerCount === 4 ? 'selected' : ''}>4 Connections</option>
+                <option value="8" ${this.settings.network.workerCount === 8 ? 'selected' : ''}>8 Connections (Default Balanced)</option>
+                <option value="16" ${this.settings.network.workerCount === 16 ? 'selected' : ''}>16 Connections (High Throughput)</option>
+                <option value="24" ${this.settings.network.workerCount === 24 ? 'selected' : ''}>24 Connections (Heavy Pipe)</option>
+                <option value="32" ${this.settings.network.workerCount === 32 ? 'selected' : ''}>32 Connections (Max Stress)</option>
+              </select>
+            </div>
+
+            <!-- Warmup Seconds -->
+            <div>
+              <label class="block text-xs font-medium text-[#a0a0a0] mb-1">Warm-up Phase (sec)</label>
+              <select id="cfg-warmup" class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white">
+                <option value="0" ${(this.settings.network.warmupSeconds || 0) === 0 ? 'selected' : ''}>0 Seconds (Disabled)</option>
+                <option value="1" ${this.settings.network.warmupSeconds === 1 ? 'selected' : ''}>1 Second</option>
+                <option value="2" ${this.settings.network.warmupSeconds === 2 ? 'selected' : ''}>2 Seconds</option>
+                <option value="3" ${this.settings.network.warmupSeconds === 3 ? 'selected' : ''}>3 Seconds</option>
+                <option value="5" ${this.settings.network.warmupSeconds === 5 ? 'selected' : ''}>5 Seconds</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <!-- Protocol -->
             <div>
               <label class="block text-xs font-medium text-[#a0a0a0] mb-1">${this.t('settings_protocol')}</label>
               <select id="cfg-protocol" class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white">
@@ -869,12 +1159,38 @@ export class AppUI {
               </select>
             </div>
 
+            <!-- Latency Mode -->
             <div>
               <label class="block text-xs font-medium text-[#a0a0a0] mb-1">${this.t('settings_latency_mode')}</label>
               <select id="cfg-latency-mode" class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white">
                 <option value="http" ${this.settings.network.latencyMode === 'http' ? 'selected' : ''}>HTTP Ping (Default)</option>
                 <option value="tcp" ${this.settings.network.latencyMode === 'tcp' ? 'selected' : ''}>TCP Ping</option>
-                <option value="icmp" ${this.settings.network.latencyMode === 'icmp' ? 'selected' : ''}>ICMP (Raw Socket, Admin on Windows)</option>
+                <option value="icmp" ${this.settings.network.latencyMode === 'icmp' ? 'selected' : ''}>ICMP (Raw Socket)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <!-- Jitter Ping Samples -->
+            <div>
+              <label class="block text-xs font-medium text-[#a0a0a0] mb-1">Jitter Ping Sample Count</label>
+              <select id="cfg-jitter-samples" class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white">
+                <option value="3" ${(this.settings.network.jitterPingSamples || 10) === 3 ? 'selected' : ''}>3 Samples (Fast)</option>
+                <option value="5" ${(this.settings.network.jitterPingSamples || 10) === 5 ? 'selected' : ''}>5 Samples</option>
+                <option value="10" ${(this.settings.network.jitterPingSamples || 10) === 10 ? 'selected' : ''}>10 Samples (Default)</option>
+                <option value="15" ${(this.settings.network.jitterPingSamples || 10) === 15 ? 'selected' : ''}>15 Samples</option>
+                <option value="20" ${(this.settings.network.jitterPingSamples || 10) === 20 ? 'selected' : ''}>20 Samples</option>
+                <option value="30" ${(this.settings.network.jitterPingSamples || 10) === 30 ? 'selected' : ''}>30 Samples (High Precision)</option>
+              </select>
+            </div>
+
+            <!-- IP Version -->
+            <div>
+              <label class="block text-xs font-medium text-[#a0a0a0] mb-1">IP Protocol Stack</label>
+              <select id="cfg-ip-version" class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white">
+                <option value="auto" ${(this.settings.network.ipVersion || 'auto') === 'auto' ? 'selected' : ''}>Dual-Stack Auto (IPv4/IPv6)</option>
+                <option value="ipv4" ${this.settings.network.ipVersion === 'ipv4' ? 'selected' : ''}>Force IPv4 Only</option>
+                <option value="ipv6" ${this.settings.network.ipVersion === 'ipv6' ? 'selected' : ''}>Force IPv6 Only</option>
               </select>
             </div>
           </div>
@@ -888,9 +1204,87 @@ export class AppUI {
           </div>
         </div>
 
-        <!-- SOCKS5 / V2Ray Proxy Configuration Card -->
+        <!-- 2. Network Routing, DNS & Virtual Location Card -->
         <div class="metric-card space-y-4">
-          <div class="flex items-center justify-between">
+          <div class="flex items-center justify-between border-b border-white/5 pb-2">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-[#60cdff]">Source Interface, DNS & Virtual Location</h3>
+            <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-[#a0a0a0]">Advanced Network</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-medium text-[#a0a0a0] mb-1">Source Interface IP (Local Binding)</label>
+              <input id="cfg-source-ip" type="text"
+                placeholder="e.g. 192.168.1.105 (leave empty for auto)"
+                value="${this.settings.network.sourceIp || ''}"
+                class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white font-mono placeholder:text-neutral-600" />
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-[#a0a0a0] mb-1">Custom DNS Resolver Server</label>
+              <input id="cfg-custom-dns" type="text"
+                placeholder="e.g. 1.1.1.1:53, 8.8.8.8:53"
+                value="${this.settings.network.customDns || ''}"
+                class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white font-mono placeholder:text-neutral-600" />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-[#a0a0a0] mb-1">Custom HTTP User-Agent Header</label>
+            <input id="cfg-user-agent" type="text"
+              placeholder="e.g. UploadPulse/2.0.0 (Windows 11 x64)"
+              value="${this.settings.network.userAgent || ''}"
+              class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white font-mono placeholder:text-neutral-600" />
+          </div>
+
+          <div class="grid grid-cols-3 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-[#a0a0a0] mb-1">Virtual City Name</label>
+              <input id="cfg-virtual-city" type="text"
+                placeholder="e.g. Frankfurt"
+                value="${this.settings.network.virtualCity || ''}"
+                class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white placeholder:text-neutral-600" />
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-[#a0a0a0] mb-1">Virtual Latitude</label>
+              <input id="cfg-latitude" type="number" step="any"
+                placeholder="50.1109"
+                value="${this.settings.network.latitude !== null && this.settings.network.latitude !== undefined ? this.settings.network.latitude : ''}"
+                class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white font-mono placeholder:text-neutral-600" />
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-[#a0a0a0] mb-1">Virtual Longitude</label>
+              <input id="cfg-longitude" type="number" step="any"
+                placeholder="8.6821"
+                value="${this.settings.network.longitude !== null && this.settings.network.longitude !== undefined ? this.settings.network.longitude : ''}"
+                class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white font-mono placeholder:text-neutral-600" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-medium text-[#a0a0a0] mb-1">Server Search Keyword Filter</label>
+              <input id="cfg-server-keyword" type="text"
+                placeholder="e.g. Vodafone, Telecom, Core"
+                value="${this.settings.network.serverSearchKeyword || ''}"
+                class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white placeholder:text-neutral-600" />
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-[#a0a0a0] mb-1">Country ISO Code Filter</label>
+              <input id="cfg-country-filter" type="text"
+                placeholder="e.g. DE, US, IR, GB, FR"
+                value="${this.settings.network.countryFilter || ''}"
+                class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white uppercase placeholder:text-neutral-600" />
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. SOCKS5 / V2Ray Proxy Configuration Card -->
+        <div class="metric-card space-y-4">
+          <div class="flex items-center justify-between border-b border-white/5 pb-2">
             <h3 class="text-xs font-bold uppercase tracking-wider text-[#60cdff]">SOCKS5 & V2Ray Proxy Configuration</h3>
             <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-[#60cdff]/10 text-[#60cdff] border border-[#60cdff]/20">
               v2ray / xray / clash / shadowsocks
@@ -898,7 +1292,7 @@ export class AppUI {
           </div>
 
           <p class="text-xs text-[#a0a0a0]">
-            Route pure upload speed tests through your local V2Ray or Shadowsocks SOCKS5 inbound proxy port.
+            Route pure upload and download speed tests through your local V2Ray or Shadowsocks SOCKS5 inbound proxy port.
           </p>
 
           <div>
@@ -939,18 +1333,33 @@ export class AppUI {
           </div>
         </div>
 
-        <!-- Display & Localization Settings Card -->
+        <!-- 4. Display, Appearance & Notifications Card -->
         <div class="metric-card space-y-4">
-          <h3 class="text-xs font-bold uppercase tracking-wider text-[#60cdff]">${this.t('settings_display')}</h3>
+          <div class="flex items-center justify-between border-b border-white/5 pb-2">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-[#60cdff]">${this.t('settings_display')}</h3>
+            <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-[#a0a0a0]">UI & Audio</span>
+          </div>
 
-          <div class="grid grid-cols-2 gap-4">
+          <div class="grid grid-cols-3 gap-3">
             <div>
               <label class="block text-xs font-medium text-[#a0a0a0] mb-1">${this.t('settings_speed_unit')}</label>
               <select id="cfg-speed-unit" class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white">
-                <option value="Mbps" ${this.settings.display.speedUnit === 'Mbps' ? 'selected' : ''}>Megabits per sec (Mbps)</option>
-                <option value="MBps" ${this.settings.display.speedUnit === 'MBps' ? 'selected' : ''}>Megabytes per sec (MB/s)</option>
-                <option value="kbps" ${this.settings.display.speedUnit === 'kbps' ? 'selected' : ''}>Kilobits per sec (kbps)</option>
-                <option value="kBps" ${this.settings.display.speedUnit === 'kBps' ? 'selected' : ''}>Kilobytes per sec (kB/s)</option>
+                <option value="Mbps" ${this.settings.display.speedUnit === 'Mbps' ? 'selected' : ''}>Megabits/sec (Mbps)</option>
+                <option value="MBps" ${this.settings.display.speedUnit === 'MBps' ? 'selected' : ''}>Megabytes/sec (MB/s)</option>
+                <option value="Gbps" ${this.settings.display.speedUnit === 'Gbps' ? 'selected' : ''}>Gigabits/sec (Gbps)</option>
+                <option value="kbps" ${this.settings.display.speedUnit === 'kbps' ? 'selected' : ''}>Kilobits/sec (kbps)</option>
+                <option value="kBps" ${this.settings.display.speedUnit === 'kBps' ? 'selected' : ''}>Kilobytes/sec (kB/s)</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-[#a0a0a0] mb-1">Decimal Precision</label>
+              <select id="cfg-precision" class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white">
+                <option value="0" ${(this.settings.display.decimalPrecision ?? 2) === 0 ? 'selected' : ''}>0 Decimals (100 Mbps)</option>
+                <option value="1" ${(this.settings.display.decimalPrecision ?? 2) === 1 ? 'selected' : ''}>1 Decimal (100.5 Mbps)</option>
+                <option value="2" ${(this.settings.display.decimalPrecision ?? 2) === 2 ? 'selected' : ''}>2 Decimals (100.52 Mbps)</option>
+                <option value="3" ${(this.settings.display.decimalPrecision ?? 2) === 3 ? 'selected' : ''}>3 Decimals (100.524 Mbps)</option>
+                <option value="4" ${(this.settings.display.decimalPrecision ?? 2) === 4 ? 'selected' : ''}>4 Decimals (High precision)</option>
               </select>
             </div>
 
@@ -963,18 +1372,115 @@ export class AppUI {
             </div>
           </div>
 
-          <div class="flex items-center justify-between pt-2 border-t border-white/5">
+          <div class="grid grid-cols-2 gap-4">
             <div>
-              <div class="text-xs font-medium text-white">${this.t('settings_privacy_mask')}</div>
-              <div class="text-[11px] text-[#a0a0a0]">Masks client IP in exports and summaries (e.g. 192.168.***.***).</div>
+              <label class="block text-xs font-medium text-[#a0a0a0] mb-1">Visual Theme</label>
+              <select id="cfg-theme" class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white">
+                <option value="dark" ${(this.settings.display.theme || 'dark') === 'dark' ? 'selected' : ''}>Windows 11 Dark (Mica)</option>
+                <option value="light" ${this.settings.display.theme === 'light' ? 'selected' : ''}>Windows 11 Light (Fluent)</option>
+                <option value="oled" ${this.settings.display.theme === 'oled' ? 'selected' : ''}>OLED High-Contrast Black</option>
+                <option value="system" ${this.settings.display.theme === 'system' ? 'selected' : ''}>System Default</option>
+              </select>
             </div>
-            <input id="cfg-mask-ip" type="checkbox" class="w-4 h-4 rounded accent-[#60cdff]" ${this.settings.display.maskSensitiveData ? 'checked' : ''}/>
+
+            <div>
+              <label class="block text-xs font-medium text-[#a0a0a0] mb-1">Chart Retention Points</label>
+              <select id="cfg-chart-points" class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white">
+                <option value="20" ${(this.settings.display.chartRetentionPoints || 40) === 20 ? 'selected' : ''}>20 Data Points</option>
+                <option value="40" ${(this.settings.display.chartRetentionPoints || 40) === 40 ? 'selected' : ''}>40 Points (Default)</option>
+                <option value="60" ${(this.settings.display.chartRetentionPoints || 40) === 60 ? 'selected' : ''}>60 Points</option>
+                <option value="100" ${(this.settings.display.chartRetentionPoints || 40) === 100 ? 'selected' : ''}>100 Points (Wide History)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="space-y-3 pt-2 border-t border-white/5">
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-xs font-medium text-white">Live Throughput Chart</div>
+                <div class="text-[11px] text-[#a0a0a0]">Displays a real-time spline canvas graphing speed during active testing.</div>
+              </div>
+              <input id="cfg-show-chart" type="checkbox" class="w-4 h-4 rounded accent-[#60cdff]" ${this.settings.display.showLiveChart ? 'checked' : ''}/>
+            </div>
+
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-xs font-medium text-white">Windows 11 Mica Glass Effect</div>
+                <div class="text-[11px] text-[#a0a0a0]">Renders dynamic translucent acrylic backdrop styling.</div>
+              </div>
+              <input id="cfg-enable-mica" type="checkbox" class="w-4 h-4 rounded accent-[#60cdff]" ${(this.settings.display.enableMica ?? true) ? 'checked' : ''}/>
+            </div>
+
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-xs font-medium text-white">Desktop Notification on Test Completion</div>
+                <div class="text-[11px] text-[#a0a0a0]">Triggers a native Windows 11 toast notification with final results.</div>
+              </div>
+              <input id="cfg-completion-notification" type="checkbox" class="w-4 h-4 rounded accent-[#60cdff]" ${(this.settings.display.completionNotification ?? true) ? 'checked' : ''}/>
+            </div>
+
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-xs font-medium text-white">Audio Alert Chime</div>
+                <div class="text-[11px] text-[#a0a0a0]">Plays an acoustic sound chime when benchmarks finish.</div>
+              </div>
+              <input id="cfg-completion-sound" type="checkbox" class="w-4 h-4 rounded accent-[#60cdff]" ${(this.settings.display.completionSound ?? true) ? 'checked' : ''}/>
+            </div>
+
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-xs font-medium text-white">Auto-start Test on Application Launch</div>
+                <div class="text-[11px] text-[#a0a0a0]">Automatically initiates speed test immediately when the app opens.</div>
+              </div>
+              <input id="cfg-auto-start" type="checkbox" class="w-4 h-4 rounded accent-[#60cdff]" ${(this.settings.display.autoStartOnLaunch ?? false) ? 'checked' : ''}/>
+            </div>
+
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-xs font-medium text-white">${this.t('settings_privacy_mask')}</div>
+                <div class="text-[11px] text-[#a0a0a0]">Masks client IP in exports and summaries (e.g. 192.168.***.***).</div>
+              </div>
+              <input id="cfg-mask-ip" type="checkbox" class="w-4 h-4 rounded accent-[#60cdff]" ${this.settings.display.maskSensitiveData ? 'checked' : ''}/>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. History Storage & Retention Card -->
+        <div class="metric-card space-y-4">
+          <div class="flex items-center justify-between border-b border-white/5 pb-2">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-[#60cdff]">Local History Retention</h3>
+            <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-[#a0a0a0]">Storage Engine</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-medium text-[#a0a0a0] mb-1">Max Stored Records</label>
+              <select id="cfg-max-records" class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white">
+                <option value="25" ${(this.settings.history?.maxStoredRecords || 100) === 25 ? 'selected' : ''}>25 Records</option>
+                <option value="50" ${(this.settings.history?.maxStoredRecords || 100) === 50 ? 'selected' : ''}>50 Records</option>
+                <option value="100" ${(this.settings.history?.maxStoredRecords || 100) === 100 ? 'selected' : ''}>100 Records (Default)</option>
+                <option value="250" ${(this.settings.history?.maxStoredRecords || 100) === 250 ? 'selected' : ''}>250 Records</option>
+                <option value="500" ${(this.settings.history?.maxStoredRecords || 100) === 500 ? 'selected' : ''}>500 Records</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-[#a0a0a0] mb-1">Data Retention Period</label>
+              <select id="cfg-retention-days" class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white">
+                <option value="30" ${(this.settings.history?.retentionDays || 90) === 30 ? 'selected' : ''}>30 Days</option>
+                <option value="60" ${(this.settings.history?.retentionDays || 90) === 60 ? 'selected' : ''}>60 Days</option>
+                <option value="90" ${(this.settings.history?.retentionDays || 90) === 90 ? 'selected' : ''}>90 Days (Default)</option>
+                <option value="180" ${(this.settings.history?.retentionDays || 90) === 180 ? 'selected' : ''}>180 Days (Half Year)</option>
+                <option value="365" ${(this.settings.history?.retentionDays || 90) === 365 ? 'selected' : ''}>365 Days (Full Year)</option>
+                <option value="0" ${(this.settings.history?.retentionDays || 90) === 0 ? 'selected' : ''}>Keep Forever (Unlimited)</option>
+              </select>
+            </div>
           </div>
         </div>
 
         <!-- Save Button -->
-        <div class="flex justify-end">
-          <button id="btn-save-settings" class="theme-btn-primary">
+        <div class="flex justify-end gap-3 pt-2">
+          <button id="btn-save-settings" class="theme-btn-primary px-6 py-2.5 text-sm font-semibold">
             ${this.t('save_settings')}
           </button>
         </div>
@@ -1043,25 +1549,80 @@ export class AppUI {
     const btnSave = document.getElementById('btn-save-settings');
     if (btnSave) {
       btnSave.onclick = async () => {
+        const testMode = (document.getElementById('cfg-test-mode') as HTMLSelectElement).value as any;
         const dur = parseInt((document.getElementById('cfg-duration') as HTMLSelectElement).value, 10);
         const wrk = parseInt((document.getElementById('cfg-workers') as HTMLSelectElement).value, 10);
+        const warmup = parseInt((document.getElementById('cfg-warmup') as HTMLSelectElement).value, 10);
         const proto = (document.getElementById('cfg-protocol') as HTMLSelectElement).value as any;
         const latMode = (document.getElementById('cfg-latency-mode') as HTMLSelectElement).value as any;
+        const jitterSamples = parseInt((document.getElementById('cfg-jitter-samples') as HTMLSelectElement).value, 10);
+        const ipVersion = (document.getElementById('cfg-ip-version') as HTMLSelectElement).value as any;
         const savMode = (document.getElementById('cfg-saving-mode') as HTMLInputElement).checked;
-        const unit = (document.getElementById('cfg-speed-unit') as HTMLSelectElement).value as any;
-        const lang = (document.getElementById('cfg-language') as HTMLSelectElement).value as any;
-        const mask = (document.getElementById('cfg-mask-ip') as HTMLInputElement).checked;
+
+        const sourceIp = ((document.getElementById('cfg-source-ip') as HTMLInputElement)?.value || '').trim();
+        const customDns = ((document.getElementById('cfg-custom-dns') as HTMLInputElement)?.value || '').trim();
+        const userAgent = ((document.getElementById('cfg-user-agent') as HTMLInputElement)?.value || '').trim();
+        const virtualCity = ((document.getElementById('cfg-virtual-city') as HTMLInputElement)?.value || '').trim();
+        const latVal = parseFloat((document.getElementById('cfg-latitude') as HTMLInputElement)?.value);
+        const lonVal = parseFloat((document.getElementById('cfg-longitude') as HTMLInputElement)?.value);
+        const serverKeyword = ((document.getElementById('cfg-server-keyword') as HTMLInputElement)?.value || '').trim();
+        const countryFilter = ((document.getElementById('cfg-country-filter') as HTMLInputElement)?.value || '').trim().toUpperCase();
         const proxyURL = ((document.getElementById('cfg-proxy-url') as HTMLInputElement)?.value || '').trim();
 
+        const unit = (document.getElementById('cfg-speed-unit') as HTMLSelectElement).value as any;
+        const prec = parseInt((document.getElementById('cfg-precision') as HTMLSelectElement).value, 10);
+        const lang = (document.getElementById('cfg-language') as HTMLSelectElement).value as any;
+        const theme = (document.getElementById('cfg-theme') as HTMLSelectElement).value as any;
+        const chartPoints = parseInt((document.getElementById('cfg-chart-points') as HTMLSelectElement).value, 10);
+        const showChart = (document.getElementById('cfg-show-chart') as HTMLInputElement).checked;
+        const enableMica = (document.getElementById('cfg-enable-mica') as HTMLInputElement).checked;
+        const compNotif = (document.getElementById('cfg-completion-notification') as HTMLInputElement).checked;
+        const compSound = (document.getElementById('cfg-completion-sound') as HTMLInputElement).checked;
+        const autoStart = (document.getElementById('cfg-auto-start') as HTMLInputElement).checked;
+        const mask = (document.getElementById('cfg-mask-ip') as HTMLInputElement).checked;
+
+        const maxRecs = parseInt((document.getElementById('cfg-max-records') as HTMLSelectElement).value, 10);
+        const retDays = parseInt((document.getElementById('cfg-retention-days') as HTMLSelectElement).value, 10);
+
+        // Populate Network Settings
+        this.settings.network.testMode = testMode;
         this.settings.network.durationSeconds = dur;
         this.settings.network.workerCount = wrk;
+        this.settings.network.warmupSeconds = warmup;
         this.settings.network.protocol = proto;
         this.settings.network.latencyMode = latMode;
+        this.settings.network.jitterPingSamples = jitterSamples;
+        this.settings.network.ipVersion = ipVersion;
         this.settings.network.savingMode = savMode;
+        this.settings.network.sourceIp = sourceIp;
+        this.settings.network.customDns = customDns;
+        this.settings.network.userAgent = userAgent;
+        this.settings.network.virtualCity = virtualCity;
+        this.settings.network.latitude = isNaN(latVal) ? null : latVal;
+        this.settings.network.longitude = isNaN(lonVal) ? null : lonVal;
+        this.settings.network.serverSearchKeyword = serverKeyword;
+        this.settings.network.countryFilter = countryFilter;
         this.settings.network.proxyURL = proxyURL;
+
+        // Populate Display Settings
         this.settings.display.speedUnit = unit;
+        this.settings.display.decimalPrecision = prec;
         this.settings.display.language = lang;
+        this.settings.display.theme = theme;
+        this.settings.display.chartRetentionPoints = chartPoints;
+        this.settings.display.showLiveChart = showChart;
+        this.settings.display.enableMica = enableMica;
+        this.settings.display.completionNotification = compNotif;
+        this.settings.display.completionSound = compSound;
+        this.settings.display.autoStartOnLaunch = autoStart;
         this.settings.display.maskSensitiveData = mask;
+
+        // Populate History Settings
+        if (!this.settings.history) {
+          this.settings.history = { maxStoredRecords: 100, retentionDays: 90, autoExportCSV: false, autoExportJSON: false };
+        }
+        this.settings.history.maxStoredRecords = maxRecs;
+        this.settings.history.retentionDays = retDays;
 
         await Bridge.updateSettings(this.settings);
         this.locale = await Bridge.getLocale(lang);

@@ -74,6 +74,12 @@ func (m *Manager) Update(newSettings AppSettings) error {
 
 // ValidateSettings validates and sanitizes all configuration fields.
 func ValidateSettings(s AppSettings) (AppSettings, error) {
+	// TestMode validation: "both", "download", "upload"
+	s.Network.TestMode = strings.ToLower(strings.TrimSpace(s.Network.TestMode))
+	if s.Network.TestMode != "download" && s.Network.TestMode != "upload" && s.Network.TestMode != "both" {
+		s.Network.TestMode = "both"
+	}
+
 	// Duration: 1 to 300 seconds
 	if s.Network.DurationSeconds < 1 {
 		s.Network.DurationSeconds = 1
@@ -86,6 +92,26 @@ func ValidateSettings(s AppSettings) (AppSettings, error) {
 		s.Network.WorkerCount = 0
 	} else if s.Network.WorkerCount > 32 {
 		s.Network.WorkerCount = 32
+	}
+
+	// Jitter sample count: 5 to 50
+	if s.Network.JitterSampleCount < 5 {
+		s.Network.JitterSampleCount = 5
+	} else if s.Network.JitterSampleCount > 50 {
+		s.Network.JitterSampleCount = 50
+	}
+
+	// IP Version: "auto", "ipv4", "ipv6"
+	s.Network.IPVersion = strings.ToLower(strings.TrimSpace(s.Network.IPVersion))
+	if s.Network.IPVersion != "ipv4" && s.Network.IPVersion != "ipv6" {
+		s.Network.IPVersion = "auto"
+	}
+
+	// Warmup seconds: 0 to 5
+	if s.Network.WarmupSeconds < 0 {
+		s.Network.WarmupSeconds = 0
+	} else if s.Network.WarmupSeconds > 5 {
+		s.Network.WarmupSeconds = 5
 	}
 
 	// Protocol: "http" or "tcp"
@@ -128,7 +154,7 @@ func ValidateSettings(s AppSettings) (AppSettings, error) {
 
 	// Unit validation
 	switch s.Display.SpeedUnit {
-	case "Mbps", "MB/s", "Kbps", "MiB/s":
+	case "Mbps", "MBps", "MB/s", "kbps", "Kbps", "kBps", "MiB/s", "Gbps":
 		// valid
 	default:
 		s.Display.SpeedUnit = "Mbps"
@@ -141,9 +167,16 @@ func ValidateSettings(s AppSettings) (AppSettings, error) {
 		s.Display.DecimalPrecision = 3
 	}
 
-	// Theme: system, dark, light
+	// Chart retention points: 20 to 100
+	if s.Display.ChartRetentionPoints < 20 {
+		s.Display.ChartRetentionPoints = 20
+	} else if s.Display.ChartRetentionPoints > 100 {
+		s.Display.ChartRetentionPoints = 100
+	}
+
+	// Theme: system, dark, light, oled, cyber
 	switch s.Display.Theme {
-	case "light", "dark", "system":
+	case "light", "dark", "system", "oled", "cyber":
 		// valid
 	default:
 		s.Display.Theme = "system"
