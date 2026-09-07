@@ -1,8 +1,10 @@
 node_modules/
 build/
-dist/
+dist/*
+!dist/.gitkeep
 coverage/
 .DS_Store
 *.log
+*.exe
 .env*
 !.env.example

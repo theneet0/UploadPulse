@@ -35,11 +35,14 @@ jobs:
             npm install
           fi
 
-      - name: Run Go Unit Tests & AST Guard
-        run: go test -v ./...
-
       - name: Build Frontend Assets
         run: npm run build
+
+      - name: Ensure Dist Directory Exists
+        run: mkdir -p dist && touch dist/.gitkeep
+
+      - name: Run Go Unit Tests & AST Guard
+        run: go test -v ./...
 
       - name: Compile 64-bit Windows 11 Executable
         run: |
