@@ -1,0 +1,279 @@
+@import "tailwindcss";
+
+:root {
+  --accent: #60cdff;
+  --accent-hover: #45b1e6;
+  --bg: #202020;
+  --sidebar: #2c2c2c;
+  --card: #323232;
+  --card-hover: #383838;
+  --text-main: #ffffff;
+  --text-sub: #a0a0a0;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.16);
+  --font-fluent: 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-persian: 'Vazirmatn', 'Segoe UI Variable Text', Tahoma, sans-serif;
+}
+
+body {
+  font-family: var(--font-fluent);
+  background-color: var(--bg);
+  color: var(--text-main);
+  overflow: hidden;
+  margin: 0;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+body[dir="rtl"] {
+  font-family: var(--font-persian);
+  direction: rtl;
+}
+
+/* Geometric Balance Mica Backdrop */
+.mica {
+  background: rgba(32, 32, 32, 0.88);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+.sidebar-panel {
+  width: 260px;
+  background-color: var(--sidebar);
+  border-right: 1px solid var(--border);
+}
+
+body[dir="rtl"] .sidebar-panel {
+  border-right: none;
+  border-left: 1px solid var(--border);
+}
+
+/* Navigation Items with Geometric indicator */
+.nav-item {
+  padding: 10px 16px;
+  margin: 2px 8px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13.5px;
+  cursor: pointer;
+  color: var(--text-sub);
+  transition: all 0.2s cubic-bezier(0.1, 0.9, 0.2, 1);
+  position: relative;
+  text-align: left;
+}
+
+body[dir="rtl"] .nav-item {
+  text-align: right;
+}
+
+.nav-item:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.nav-item.active {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+body[dir="rtl"] .nav-item.active::before {
+  left: auto;
+  right: 0;
+}
+
+/* Geometric Balance Metric Card */
+.metric-card {
+  background: var(--card);
+  padding: 14px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  transition: border-color 0.2s ease;
+}
+
+.metric-card:hover {
+  border-color: var(--border-hover);
+}
+
+.metric-label {
+  font-size: 11px;
+  color: var(--text-sub);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+
+.metric-value {
+  font-size: 18px;
+  font-weight: 600;
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-main);
+}
+
+/* Status Badge */
+.status-badge {
+  background: rgba(96, 205, 255, 0.1);
+  color: var(--accent);
+  padding: 5px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  border: 1px solid rgba(96, 205, 255, 0.22);
+}
+
+/* Gauge Circular Geometry */
+.gauge-outer {
+  width: 320px;
+  height: 320px;
+  border-radius: 50%;
+  border: 8px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  background: radial-gradient(circle, rgba(50, 50, 50, 0.4) 0%, rgba(32, 32, 32, 0.9) 75%);
+}
+
+.speed-value {
+  font-size: 64px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-main);
+  letter-spacing: -0.02em;
+}
+
+.speed-unit {
+  color: var(--text-sub);
+  font-size: 18px;
+  margin-top: 6px;
+  font-weight: 500;
+}
+
+/* Button & Controls */
+.theme-btn-primary {
+  background: var(--accent);
+  color: #000000;
+  padding: 10px 28px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+  box-shadow: 0 4px 12px rgba(96, 205, 255, 0.25);
+}
+
+.theme-btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  box-shadow: 0 6px 16px rgba(96, 205, 255, 0.35);
+}
+
+.theme-btn-primary:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.theme-btn-stop {
+  background: #e81123 !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(232, 17, 35, 0.35) !important;
+}
+
+.theme-btn-stop:hover:not(:disabled) {
+  background: #c50f1f !important;
+}
+
+.theme-btn-secondary {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.theme-btn-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--border-hover);
+}
+
+.theme-input {
+  background: #1c1c1c;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-main);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.theme-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(96, 205, 255, 0.25);
+}
+
+/* Windows 11 Titlebar Window Controls */
+.control-btn {
+  width: 46px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text-sub);
+  transition: background 0.15s, color 0.15s;
+}
+
+.control-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-main);
+}
+
+.control-btn.close:hover {
+  background: #e81123;
+  color: #ffffff;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

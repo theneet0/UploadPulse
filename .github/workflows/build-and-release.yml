@@ -1,0 +1,56 @@
+name: Build and Release UploadPulse
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test-and-build:
+    name: Test and Build (Windows x64)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Frontend Dependencies
+        run: npm ci
+
+      - name: Run Go Unit Tests & AST Guard
+        run: go test -v ./...
+
+      - name: Build Frontend Assets
+        run: npm run build
+
+      - name: Compile 64-bit Windows 11 Executable
+        run: |
+          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -H windowsgui" -o UploadPulse-windows-amd64.exe .
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: UploadPulse-Windows-x64
+          path: UploadPulse-windows-amd64.exe
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: UploadPulse-windows-amd64.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,6 @@
+{
+  "name": "UploadPulse",
+  "description": "Production-ready 64-bit Windows 11 desktop application built with Wails v2 and Go for measuring pure internet upload speed with live telemetry, server selection, and Fluent Design.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
