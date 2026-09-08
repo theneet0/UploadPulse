@@ -51,7 +51,7 @@ jobs:
 
       - name: Build Native Windows 64-bit Executable with Wails
         run: |
-          wails build -platform windows/amd64 -clean -webview2 download -ldflags="-s -w" -o UploadPulse.exe
+          wails build -skipbindings -platform windows/amd64 -clean -webview2 download -ldflags="-s -w" -o UploadPulse.exe
 
       - name: Verify Windows Executable Produced
         shell: pwsh

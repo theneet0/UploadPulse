@@ -9,8 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-
-	"github.com/uploadpulse/uploadpulse/internal/platform"
 )
 
 // Manager manages loading, validating, and atomically persisting AppSettings.
@@ -31,7 +29,7 @@ func NewManager(customPath ...string) (*Manager, error) {
 		dataDir = filepath.Dir(filePath)
 	} else {
 		var err error
-		dataDir, err = platform.GetAppDataDir()
+		dataDir, err = GetAppDataDir()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get app data dir: %w", err)
 		}
