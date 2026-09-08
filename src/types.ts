@@ -109,7 +109,7 @@ export interface DisplaySettings {
   soundAlert?: boolean;
   autoStartOnLaunch?: boolean;
   maskSensitiveData: boolean;
-  language: 'en' | 'fa';
+  language: 'en';
 }
 
 export interface HistorySettings {
@@ -166,7 +166,7 @@ export interface HistoryRecord {
 }
 
 export interface LocaleData {
-  languageCode: 'en' | 'fa';
-  direction: 'ltr' | 'rtl';
+  languageCode: 'en';
+  direction: 'ltr';
   strings: Record<string, string>;
 }

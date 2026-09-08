@@ -8,15 +8,13 @@ func TestLocalizationDictionaries(t *testing.T) {
 		t.Errorf("expected English direction ltr, got %s", en.Direction)
 	}
 
-	fa := GetLocale("fa")
-	if fa.Direction != "rtl" {
-		t.Errorf("expected Persian direction rtl, got %s", fa.Direction)
-	}
-
 	requiredKeys := []string{
 		"app_title",
 		"start_test",
 		"stop_test",
+		"mode_both",
+		"mode_download",
+		"mode_upload",
 		"meter_current",
 		"meter_peak",
 		"meter_confirmed_data",
@@ -26,9 +24,6 @@ func TestLocalizationDictionaries(t *testing.T) {
 	for _, k := range requiredKeys {
 		if en.Strings[k] == "" {
 			t.Errorf("missing English translation for %s", k)
-		}
-		if fa.Strings[k] == "" {
-			t.Errorf("missing Persian translation for %s", k)
 		}
 	}
 }

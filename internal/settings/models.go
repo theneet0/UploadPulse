@@ -43,7 +43,7 @@ type DisplaySettings struct {
 	SoundAlert             bool    `json:"soundAlert"`             // Audio chime upon test completion
 	AutoStartOnLaunch      bool    `json:"autoStartOnLaunch"`      // Trigger test automatically when started
 	MaskSensitiveData      bool    `json:"maskSensitiveData"`      // Mask IP address and ISP names in results & exports
-	Language               string  `json:"language"`               // "en" (English LTR) or "fa" (Persian RTL)
+	Language               string  `json:"language"`               // "en" (English)
 }
 
 // HistorySettings holds retention and persistence policies.

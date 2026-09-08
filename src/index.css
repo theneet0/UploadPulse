@@ -12,7 +12,6 @@
   --border: rgba(255, 255, 255, 0.08);
   --border-hover: rgba(255, 255, 255, 0.16);
   --font-fluent: 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-persian: 'Vazirmatn', 'Segoe UI Variable Text', Tahoma, sans-serif;
 }
 
 body {
@@ -23,11 +22,6 @@ body {
   margin: 0;
   user-select: none;
   -webkit-font-smoothing: antialiased;
-}
-
-body[dir="rtl"] {
-  font-family: var(--font-persian);
-  direction: rtl;
 }
 
 /* Geometric Balance Mica Backdrop */
@@ -41,11 +35,6 @@ body[dir="rtl"] {
   width: 260px;
   background-color: var(--sidebar);
   border-right: 1px solid var(--border);
-}
-
-body[dir="rtl"] .sidebar-panel {
-  border-right: none;
-  border-left: 1px solid var(--border);
 }
 
 /* Navigation Items with Geometric indicator */
@@ -62,10 +51,6 @@ body[dir="rtl"] .sidebar-panel {
   transition: all 0.2s cubic-bezier(0.1, 0.9, 0.2, 1);
   position: relative;
   text-align: left;
-}
-
-body[dir="rtl"] .nav-item {
-  text-align: right;
 }
 
 .nav-item:hover {
@@ -87,11 +72,6 @@ body[dir="rtl"] .nav-item {
   width: 3px;
   background: var(--accent);
   border-radius: 2px;
-}
-
-body[dir="rtl"] .nav-item.active::before {
-  left: auto;
-  right: 0;
 }
 
 /* Geometric Balance Metric Card */
@@ -228,29 +208,6 @@ body[dir="rtl"] .nav-item.active::before {
 .theme-input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px rgba(96, 205, 255, 0.25);
-}
-
-/* Windows 11 Titlebar Window Controls */
-.control-btn {
-  width: 46px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  cursor: pointer;
-  color: var(--text-sub);
-  transition: background 0.15s, color 0.15s;
-}
-
-.control-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-main);
-}
-
-.control-btn.close:hover {
-  background: #e81123;
-  color: #ffffff;
 }
 
 /* Scrollbar */

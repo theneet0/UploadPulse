@@ -1,4 +1,4 @@
-import { Bridge, ENGLISH_LOCALE, PERSIAN_LOCALE } from './bridge';
+import { Bridge, ENGLISH_LOCALE } from './bridge';
 import { LiveChart } from './chart';
 import { AppSettings, HistoryRecord, LiveMetrics, LocaleData, ServerInfo, StateInfo } from './types';
 
@@ -48,8 +48,8 @@ export class AppUI {
   }
 
   public async init() {
-    this.locale = await Bridge.getLocale(this.settings.display.language);
-    document.body.setAttribute('dir', this.locale.direction);
+    this.locale = await Bridge.getLocale('en');
+    document.body.setAttribute('dir', 'ltr');
 
     // Bind Wails / preview events
     Bridge.on('test:state', (stateInfo: StateInfo) => {
@@ -81,7 +81,7 @@ export class AppUI {
   }
 
   private t(key: string): string {
-    return this.locale.strings[key] || key;
+    return this.locale?.strings?.[key] || ENGLISH_LOCALE.strings[key] || key;
   }
 
   private formatSpeed(bps?: number): string {
@@ -168,30 +168,13 @@ export class AppUI {
             </button>
             <div class="px-3 py-2 rounded bg-[#60cdff]/10 border border-[#60cdff]/20 text-[11px] text-[#60cdff] flex items-center gap-1.5">
               <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-              <span class="leading-tight font-medium">Pure Upload (Zero Download)</span>
+              <span class="leading-tight font-medium">High Precision Speed Engine</span>
             </div>
           </div>
         </aside>
 
         <!-- Main Viewport Area -->
         <div class="flex-1 flex flex-col relative overflow-hidden bg-[#202020]">
-          <!-- Windows 11 Title Bar (Geometric Balance) -->
-          <header id="app-titlebar" class="h-9 flex items-center justify-between px-3 bg-transparent border-b border-white/5 shrink-0">
-            <div class="flex items-center gap-3">
-              <!-- Language Switcher -->
-              <button id="btn-toggle-lang" class="theme-btn-secondary text-xs px-2.5 py-1 flex items-center gap-1.5" title="Switch Language">
-                <span class="text-[11px] font-medium">${this.settings.display.language === 'fa' ? 'English (EN)' : 'فارسی (FA)'}</span>
-              </button>
-            </div>
-
-            <!-- Windows 11 Controls -->
-            <div class="flex items-center">
-              <div class="control-btn" title="Minimize">&#xE921;</div>
-              <div class="control-btn" title="Maximize">&#xE922;</div>
-              <div class="control-btn close" title="Close">&#xE8BB;</div>
-            </div>
-          </header>
-
           <!-- Dynamic Viewport -->
           <main id="view-viewport" class="flex-1 overflow-y-auto p-6 flex flex-col"></main>
         </div>
@@ -215,18 +198,6 @@ export class AppUI {
         };
       }
     });
-
-    const langBtn = document.getElementById('btn-toggle-lang');
-    if (langBtn) {
-      langBtn.onclick = async () => {
-        const nextLang = this.settings.display.language === 'fa' ? 'en' : 'fa';
-        this.settings.display.language = nextLang;
-        await Bridge.updateSettings(this.settings);
-        this.locale = await Bridge.getLocale(nextLang);
-        document.body.setAttribute('dir', this.locale.direction);
-        this.render();
-      };
-    }
   }
 
   private renderCurrentView() {
@@ -281,7 +252,7 @@ export class AppUI {
               : 'text-[#a0a0a0] hover:text-white hover:bg-white/5'
           }">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 16V4m0 0L3 8m4-4l4 4m6 4v12m0 0l4-4m-4 4l-4-4"/></svg>
-            <span>${this.t('mode_both')}</span>
+            <span>Download & Upload</span>
           </button>
           <button id="btn-mode-download" class="px-4 py-2 rounded-lg font-medium transition flex items-center gap-2 ${
             currentMode === 'download'
@@ -289,7 +260,7 @@ export class AppUI {
               : 'text-[#a0a0a0] hover:text-white hover:bg-white/5'
           }">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v16m0 0l-6-6m6 6l6-6"/></svg>
-            <span>${this.t('mode_download')}</span>
+            <span>Download</span>
           </button>
           <button id="btn-mode-upload" class="px-4 py-2 rounded-lg font-medium transition flex items-center gap-2 ${
             currentMode === 'upload'
@@ -297,7 +268,7 @@ export class AppUI {
               : 'text-[#a0a0a0] hover:text-white hover:bg-white/5'
           }">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V4m0 0l-6 6m6-6l6 6"/></svg>
-            <span>${this.t('mode_upload')}</span>
+            <span>Upload</span>
           </button>
         </div>
 
@@ -1365,9 +1336,8 @@ export class AppUI {
 
             <div>
               <label class="block text-xs font-medium text-[#a0a0a0] mb-1">${this.t('settings_language')}</label>
-              <select id="cfg-language" class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white">
-                <option value="en" ${this.settings.display.language === 'en' ? 'selected' : ''}>English (LTR)</option>
-                <option value="fa" ${this.settings.display.language === 'fa' ? 'selected' : ''}>فارسی - Persian (RTL)</option>
+              <select id="cfg-language" class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white" disabled>
+                <option value="en" selected>English</option>
               </select>
             </div>
           </div>
@@ -1607,7 +1577,7 @@ export class AppUI {
         // Populate Display Settings
         this.settings.display.speedUnit = unit;
         this.settings.display.decimalPrecision = prec;
-        this.settings.display.language = lang;
+        this.settings.display.language = 'en';
         this.settings.display.theme = theme;
         this.settings.display.chartRetentionPoints = chartPoints;
         this.settings.display.showLiveChart = showChart;
@@ -1625,8 +1595,8 @@ export class AppUI {
         this.settings.history.retentionDays = retDays;
 
         await Bridge.updateSettings(this.settings);
-        this.locale = await Bridge.getLocale(lang);
-        document.body.setAttribute('dir', this.locale.direction);
+        this.locale = await Bridge.getLocale('en');
+        document.body.setAttribute('dir', 'ltr');
         this.showToast(this.t('settings_saved'), 'success');
         this.render();
       };

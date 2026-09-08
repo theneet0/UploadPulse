@@ -2,8 +2,8 @@ package localization
 
 // LocaleData contains translated strings for a supported language.
 type LocaleData struct {
-	LanguageCode string            `json:"languageCode"` // "en" or "fa"
-	Direction    string            `json:"direction"`    // "ltr" or "rtl"
+	LanguageCode string            `json:"languageCode"` // "en"
+	Direction    string            `json:"direction"`    // "ltr"
 	Strings      map[string]string `json:"strings"`
 }
 
@@ -49,6 +49,9 @@ var English = LocaleData{
 		"export_csv":                "Export CSV",
 		"export_json":               "Export JSON",
 		"history_empty":             "No speed tests recorded yet.",
+		"mode_both":                 "Download & Upload",
+		"mode_download":             "Download",
+		"mode_upload":               "Upload",
 		"settings_network":          "Network Configuration",
 		"settings_duration":         "Test Duration (seconds)",
 		"settings_workers":          "Concurrent Upload Workers",
@@ -77,80 +80,7 @@ var English = LocaleData{
 	},
 }
 
-var Persian = LocaleData{
-	LanguageCode: "fa",
-	Direction:    "rtl",
-	Strings: map[string]string{
-		"app_title":                 "آپلودپالس (UploadPulse)",
-		"nav_test":                  "تست آپلود",
-		"nav_servers":               "سرورها",
-		"nav_history":               "تاریخچه",
-		"nav_settings":              "تنظیمات",
-		"nav_privacy":               "حریم خصوصی",
-		"start_test":                "شروع تست آپلود",
-		"stop_test":                 "توقف تست",
-		"state_idle":                "آماده برای تست",
-		"state_discovering":         "در حال یافتن سرورها...",
-		"state_measuring_latency":   "در حال سنجش تأخیر (پینگ)...",
-		"state_uploading":           "در حال آپلود داده‌ها...",
-		"state_completed":           "تست آپلود با موفقیت پایان یافت",
-		"state_cancelled":           "تست توسط کاربر لغو شد",
-		"state_failed":              "تست با خطا مواجه شد",
-		"meter_current":             "سرعت لحظه‌ای",
-		"meter_peak":                "بیشترین سرعت",
-		"meter_average":             "میانگین سرعت",
-		"meter_latency":             "تأخیر (پینگ)",
-		"meter_confirmed_data":      "داده‌های تأیید شده سرور",
-		"meter_transmitted_data":    "حجم کل ارسالی",
-		"meter_workers":             "اتصالات همزمان",
-		"server_auto":               "انتخاب خودکار سرور",
-		"server_manual":             "انتخاب دستی سرور",
-		"server_custom":             "سرور اختصاصی",
-		"server_search_placeholder": "جستجوی سرور بر اساس شهر، کشور، شناسه...",
-		"server_custom_placeholder": "https://custom-server.com/speedtest/upload.php",
-		"copy_result":               "کپی نتیجه",
-		"copy_with_server":          "کپی با مشخصات سرور",
-		"copied_toast":              "نتیجه در کلیپ‌بورد کپی شد",
-		"repeat_test":               "تکرار تست",
-		"delete_record":             "حذف رکورد",
-		"clear_history":             "پاکسازی کامل تاریخچه",
-		"clear_confirm_title":       "پاکسازی تاریخچه تست‌ها",
-		"clear_confirm_msg":         "آیا از حذف تمام نتایج تست اطمینان دارید؟ این عملیات غیرقابل بازگشت است.",
-		"export_csv":                "خروجی CSV",
-		"export_json":               "خروجی JSON",
-		"history_empty":             "هنوز هیچ تستی ثبت نشده است.",
-		"settings_network":          "پیکربندی شبکه",
-		"settings_duration":         "مدت زمان تست (ثانیه)",
-		"settings_workers":          "تعداد اتصالات همزمان",
-		"settings_workers_auto":     "خودکار (پیش‌فرض ۸)",
-		"settings_protocol":         "پروتکل تست",
-		"settings_latency_mode":     "حالت سنجش تأخیر",
-		"settings_saving_mode":      "حالت صرفه‌جویی در ترافیک",
-		"settings_proxy":            "آدرس پروکسی (http/https/socks5)",
-		"settings_source_ip":        "آی‌پی مبدأ کارت شبکه محلی",
-		"settings_display":          "تنظیمات نمایش و ظاهر",
-		"settings_speed_unit":       "واحد اندازه‌گیری سرعت",
-		"settings_precision":        "تعداد ارقام اعشار",
-		"settings_theme":            "پوسته ظاهری",
-		"settings_mica":             "فعال‌سازی افکت شیشه‌ای میکا ویندوز ۱۱",
-		"settings_reduced_motion":   "کاهش انیمیشن‌ها",
-		"settings_chart":            "نمایش نمودار زنده آپلود",
-		"settings_privacy_mask":     "ماسک کردن آی‌پی و اطلاعات حساس",
-		"settings_language":         "زبان برنامه",
-		"privacy_title":             "بیانیه حریم خصوصی و مصرف ترافیک",
-		"privacy_body_1":            "نرم‌افزار آپلودپالس منحصراً برای سنجش سرعت ارسال (آپلود) طراحی شده است. این نرم‌افزار هرگز در هیچ مرحله‌ای تست دانلود انجام نمی‌دهد.",
-		"privacy_body_2":            "تست سرعت آپلود با ارسال داده‌های تصادفی امن به سرور هدف انجام می‌شود تا پهنای باند خروجی شما ارزیابی شود. این عملیات از حجم ترافیک اینترنت شما استفاده می‌کند.",
-		"privacy_body_3":            "آپلودپالس فاقد هرگونه ابزار جمع‌آوری داده، آمارگیر، تبلیغات یا اتصال به فضای ابری است. کلیه اطلاعات و تاریخچه تست‌ها منحصراً روی رایانه شما در مسیر %LOCALAPPDATA%\\UploadPulse ذخیره می‌گردد.",
-		"unavailable":               "نامشخص",
-		"save_settings":             "ذخیره تنظیمات",
-		"settings_saved":            "تنظیمات با موفقیت ذخیره شد",
-	},
-}
-
-// GetLocale returns the LocaleData for the requested language ("en" or "fa").
-func GetLocale(lang string) LocaleData {
-	if lang == "fa" {
-		return Persian
-	}
+// GetLocale returns the English LocaleData.
+func GetLocale(_ string) LocaleData {
 	return English
 }

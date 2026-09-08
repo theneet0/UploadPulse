@@ -20,9 +20,8 @@ UploadPulse is built with an absolute single-purpose architecture: **it measures
 - Real-time Canvas-based upload throughput chart with smooth quadratic curves and adaptive device pixel ratio.
 - Respects system reduced-motion settings.
 
-### 3. Comprehensive Localization: English (LTR) & Persian (RTL)
-- Complete two-way localization for English and Persian (فارسی).
-- Full Right-to-Left (RTL) layout support in Persian mode with Vazirmatn typography, natural control alignments, and high-legibility numerals.
+### 3. Clean English Interface & Fluent Typography
+- Built exclusively in English with Segoe UI Variable typography, natural control alignments, and high-legibility layout.
 
 ### 4. Precision Network Engine & Tunable Settings
 - Built on a hardened, context-aware fork of `speedtest-go`.

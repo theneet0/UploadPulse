@@ -180,10 +180,8 @@ func ValidateSettings(s AppSettings) (AppSettings, error) {
 		s.Display.Theme = "system"
 	}
 
-	// Language: en, fa
-	if s.Display.Language != "fa" {
-		s.Display.Language = "en"
-	}
+	// Language: en only
+	s.Display.Language = "en"
 
 	// History retention
 	if s.History.MaxRecords < 10 {
