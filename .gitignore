@@ -6,5 +6,6 @@ coverage/
 .DS_Store
 *.log
 *.exe
+*.syso
 .env*
 !.env.example

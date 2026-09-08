@@ -56,6 +56,10 @@ jobs:
       - name: Install Wails v2 CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.9.2
 
+      - name: Clean Stale Resource Objects
+        shell: bash
+        run: rm -f *.syso
+
       - name: Build Native Windows 64-bit Executable with Wails
         run: |
           wails build -skipbindings -platform windows/amd64 -clean -webview2 download -ldflags="-s -w" -o UploadPulse.exe
