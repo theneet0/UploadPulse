@@ -6,7 +6,7 @@ export class AppUI {
   private container: HTMLElement;
   private settings: AppSettings;
   private locale: LocaleData = ENGLISH_LOCALE;
-  private activeTab: 'test' | 'servers' | 'history' | 'settings' | 'privacy' = 'test';
+  private activeTab: 'test' | 'servers' | 'history' | 'settings' = 'test';
 
   // Live test state
   private currentState: StateInfo = {
@@ -171,19 +171,6 @@ export class AppUI {
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
               <span class="nav-label">${this.t('nav_settings')}</span>
             </button>
-
-            <button id="nav-privacy" class="nav-item flex-1 md:w-full ${this.activeTab === 'privacy' ? 'active' : ''}">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-              <span class="nav-label">${this.t('nav_privacy')}</span>
-            </button>
-          </div>
-
-          <!-- Bottom Section: Notice (Desktop only) -->
-          <div class="hidden md:block pt-3 border-t border-white/5 space-y-2">
-            <div class="px-3 py-2 rounded bg-[#60cdff]/10 border border-[#60cdff]/20 text-[11px] text-[#60cdff] flex items-center gap-1.5">
-              <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-              <span class="leading-tight font-medium">High Precision Speed Engine</span>
-            </div>
           </div>
         </aside>
 
@@ -203,7 +190,7 @@ export class AppUI {
   }
 
   private bindGlobalEvents() {
-    ['test', 'servers', 'history', 'settings', 'privacy'].forEach((tab) => {
+    ['test', 'servers', 'history', 'settings'].forEach((tab) => {
       const el = document.getElementById(`nav-${tab}`);
       if (el) {
         el.onclick = () => {
@@ -235,9 +222,6 @@ export class AppUI {
         break;
       case 'settings':
         this.renderSettingsView(viewport);
-        break;
-      case 'privacy':
-        this.renderPrivacyView(viewport);
         break;
     }
   }
@@ -1615,38 +1599,6 @@ export class AppUI {
         this.render();
       };
     }
-  }
-
-  // ----------------------------------------------------------------------
-  // VIEW: Privacy Notice (Geometric Balance)
-  // ----------------------------------------------------------------------
-  private renderPrivacyView(viewport: HTMLElement) {
-    viewport.innerHTML = `
-      <div class="max-w-2xl mx-auto w-full space-y-5">
-        <div>
-          <h2 class="text-lg font-semibold text-white">${this.t('privacy_title')}</h2>
-          <p class="text-xs text-[#a0a0a0]">Strict transparency regarding telemetry, network traffic, and local data storage.</p>
-        </div>
-
-        <div class="metric-card p-5 space-y-4 text-xs leading-relaxed text-slate-300">
-          <div class="p-3 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-medium">
-            Strict Architecture Guarantee: Zero Download Testing
-          </div>
-
-          <p>${this.t('privacy_body_1')}</p>
-          <p>${this.t('privacy_body_2')}</p>
-          <p>${this.t('privacy_body_3')}</p>
-
-          <div class="pt-4 border-t border-white/10 space-y-2">
-            <h4 class="font-semibold text-white">Local Data Locations on Windows 11:</h4>
-            <ul class="list-disc list-inside space-y-1 text-[#a0a0a0] font-mono text-[11px]">
-              <li>%LOCALAPPDATA%\\UploadPulse\\settings.json</li>
-              <li>%LOCALAPPDATA%\\UploadPulse\\history.json</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    `;
   }
 
   private showToast(msg: string, type: 'info' | 'success' | 'error' = 'info') {
