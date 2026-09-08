@@ -12,8 +12,6 @@ jobs:
   build-windows:
     name: Build Native Windows Executable
     runs-on: windows-latest
-    permissions:
-      contents: write
 
     steps:
       - name: Checkout Code
@@ -81,13 +79,84 @@ jobs:
           Compress-Archive -Path "UploadPulse.exe", "README.md", "LICENSE" -DestinationPath "UploadPulse-windows-amd64.zip" -Force
           Write-Host "Created UploadPulse-windows-amd64.zip successfully"
 
-      - name: Upload Build Artifacts
+      - name: Upload Windows Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: UploadPulse-Windows-x64
           path: |
             UploadPulse.exe
             UploadPulse-windows-amd64.zip
+
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Build Web Assets and Sync Android
+        run: npm run build:android
+
+      - name: Make Gradlew Executable
+        run: chmod +x android/gradlew
+
+      - name: Build Android APK with Gradle
+        run: |
+          cd android
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Verify and Package APK
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk UploadPulse-android.apk
+          ls -la UploadPulse-android.apk
+
+      - name: Upload Android Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: UploadPulse-Android-APK
+          path: UploadPulse-android.apk
+
+  release:
+    name: Publish Multi-Platform Release
+    needs: [build-windows, build-android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download Windows Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: UploadPulse-Windows-x64
+          path: ./release-assets
+
+      - name: Download Android Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: UploadPulse-Android-APK
+          path: ./release-assets
 
       - name: Determine Release Tag and Name
         id: release_meta
@@ -109,8 +178,9 @@ jobs:
           tag_name: ${{ steps.release_meta.outputs.tag_name }}
           name: ${{ steps.release_meta.outputs.release_name }}
           files: |
-            UploadPulse.exe
-            UploadPulse-windows-amd64.zip
+            ./release-assets/UploadPulse.exe
+            ./release-assets/UploadPulse-windows-amd64.zip
+            ./release-assets/UploadPulse-android.apk
           generate_release_notes: true
           draft: false
           prerelease: false

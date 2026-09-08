@@ -121,10 +121,23 @@ export class AppUI {
 
   private render() {
     this.container.innerHTML = `
-      <div id="uploadpulse-root" class="mica flex flex-row h-screen w-screen overflow-hidden text-[#ffffff] select-none">
-        <!-- Sidebar Navigation (Geometric Balance) -->
-        <aside id="app-sidebar" class="sidebar-panel flex flex-col justify-between p-3 shrink-0">
-          <div>
+      <div id="uploadpulse-root" class="mica flex flex-col md:flex-row h-screen w-screen overflow-hidden text-[#ffffff] select-none">
+        <!-- Mobile Top App Bar (Android Header) -->
+        <header class="flex md:hidden items-center justify-between px-4 py-2 bg-[#2c2c2c] border-b border-white/10 shrink-0 z-20">
+          <div class="flex items-center gap-2">
+            <div class="w-6 h-6 rounded-md bg-[#60cdff]/15 flex items-center justify-center text-[#60cdff]">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 19V5M5 12l7-7 7 7"/>
+              </svg>
+            </div>
+            <span class="text-xs font-bold tracking-wider uppercase text-white">UploadPulse</span>
+          </div>
+          <span class="text-[9px] px-2 py-0.5 rounded bg-[#60cdff]/15 text-[#60cdff] border border-[#60cdff]/30 font-mono font-medium">v1.0</span>
+        </header>
+
+        <!-- Sidebar Navigation (Desktop) / Bottom Tab Bar (Mobile Android) -->
+        <aside id="app-sidebar" class="sidebar-panel flex flex-row md:flex-col justify-between items-center md:items-stretch p-1.5 md:p-3 shrink-0 order-2 md:order-1 z-30">
+          <div class="hidden md:block">
             <!-- Sidebar Title Bar -->
             <div class="h-10 flex items-center gap-2.5 px-3 mb-3 border-b border-white/5">
               <div class="w-6 h-6 rounded-md bg-[#60cdff]/15 flex items-center justify-center text-[#60cdff]">
@@ -133,39 +146,40 @@ export class AppUI {
                 </svg>
               </div>
               <span class="text-xs font-semibold tracking-wider uppercase text-white/90">UploadPulse</span>
-              <span class="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-[#a0a0a0] border border-white/10 font-mono">x64</span>
-            </div>
-
-            <!-- Navigation Links -->
-            <div class="space-y-1">
-              <button id="nav-test" class="nav-item w-full ${this.activeTab === 'test' ? 'active' : ''}">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-                <span>${this.t('nav_test')}</span>
-              </button>
-
-              <button id="nav-servers" class="nav-item w-full ${this.activeTab === 'servers' ? 'active' : ''}">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-                <span>${this.t('nav_servers')}</span>
-              </button>
-
-              <button id="nav-history" class="nav-item w-full ${this.activeTab === 'history' ? 'active' : ''}">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                <span>${this.t('nav_history')}</span>
-              </button>
-
-              <button id="nav-settings" class="nav-item w-full ${this.activeTab === 'settings' ? 'active' : ''}">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                <span>${this.t('nav_settings')}</span>
-              </button>
+              <span class="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-[#a0a0a0] border border-white/10 font-mono">Win & Android</span>
             </div>
           </div>
 
-          <!-- Bottom Section: Privacy & Notice -->
-          <div class="pt-3 border-t border-white/5 space-y-2">
-            <button id="nav-privacy" class="nav-item w-full ${this.activeTab === 'privacy' ? 'active' : ''}">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-              <span>${this.t('nav_privacy')}</span>
+          <!-- Navigation Links -->
+          <div class="flex flex-row md:flex-col justify-around md:justify-start w-full gap-0.5 md:gap-1 md:space-y-1">
+            <button id="nav-test" class="nav-item flex-1 md:w-full ${this.activeTab === 'test' ? 'active' : ''}">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+              <span class="nav-label">${this.t('nav_test')}</span>
             </button>
+
+            <button id="nav-servers" class="nav-item flex-1 md:w-full ${this.activeTab === 'servers' ? 'active' : ''}">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+              <span class="nav-label">${this.t('nav_servers')}</span>
+            </button>
+
+            <button id="nav-history" class="nav-item flex-1 md:w-full ${this.activeTab === 'history' ? 'active' : ''}">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <span class="nav-label">${this.t('nav_history')}</span>
+            </button>
+
+            <button id="nav-settings" class="nav-item flex-1 md:w-full ${this.activeTab === 'settings' ? 'active' : ''}">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              <span class="nav-label">${this.t('nav_settings')}</span>
+            </button>
+
+            <button id="nav-privacy" class="nav-item flex-1 md:w-full ${this.activeTab === 'privacy' ? 'active' : ''}">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <span class="nav-label">${this.t('nav_privacy')}</span>
+            </button>
+          </div>
+
+          <!-- Bottom Section: Notice (Desktop only) -->
+          <div class="hidden md:block pt-3 border-t border-white/5 space-y-2">
             <div class="px-3 py-2 rounded bg-[#60cdff]/10 border border-[#60cdff]/20 text-[11px] text-[#60cdff] flex items-center gap-1.5">
               <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
               <span class="leading-tight font-medium">High Precision Speed Engine</span>
@@ -174,9 +188,9 @@ export class AppUI {
         </aside>
 
         <!-- Main Viewport Area -->
-        <div class="flex-1 flex flex-col relative overflow-hidden bg-[#202020]">
+        <div class="flex-1 flex flex-col relative overflow-hidden bg-[#202020] order-1 md:order-2">
           <!-- Dynamic Viewport -->
-          <main id="view-viewport" class="flex-1 overflow-y-auto p-6 flex flex-col"></main>
+          <main id="view-viewport" class="flex-1 overflow-y-auto p-3 md:p-6 flex flex-col"></main>
         </div>
 
         <!-- Global Toast Container -->
