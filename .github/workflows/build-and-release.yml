@@ -107,11 +107,11 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: 'platforms;android-35 build-tools;35.0.0'
+          packages: 'platforms;android-36 platforms;android-35 build-tools;36.0.0 build-tools;35.0.0'
 
       - name: Accept Android SDK Licenses
         run: |
-          yes | sdkmanager --licenses || true
+          yes 2>/dev/null | sdkmanager --licenses >/dev/null 2>&1 || true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -134,13 +134,13 @@ jobs:
           java -version
           echo "=== Android SDK Path ==="
           echo "ANDROID_HOME: $ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
+          echo "Available Platforms:"
           ls -la "$ANDROID_HOME/platforms" || true
 
       - name: Build Android APK with Gradle
         run: |
           cd android
-          ./gradlew assembleDebug --stacktrace --info --full-stacktrace --no-daemon
+          ./gradlew assembleDebug --stacktrace --no-daemon
 
       - name: Upload Build Failure Reports and Logs
         if: failure()
@@ -148,8 +148,8 @@ jobs:
         with:
           name: android-build-failure-reports
           path: |
-            android/app/build/reports/
-            android/app/build/outputs/logs/
+            android/app/build/reports/**
+            android/app/build/outputs/**
           if-no-files-found: ignore
 
       - name: Verify and Package APK
