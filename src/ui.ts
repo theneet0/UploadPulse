@@ -1,5 +1,6 @@
 import { Bridge, ENGLISH_LOCALE } from './bridge';
 import { LiveChart } from './chart';
+import { isAndroid, isMobileDevice, isWails } from './platform';
 import { AppSettings, HistoryRecord, LiveMetrics, LocaleData, ServerInfo, StateInfo } from './types';
 
 export class AppUI {
@@ -123,7 +124,7 @@ export class AppUI {
     this.container.innerHTML = `
       <div id="uploadpulse-root" class="mica flex flex-col md:flex-row h-screen w-screen overflow-hidden text-[#ffffff] select-none">
         <!-- Mobile Top App Bar (Android Header) -->
-        <header class="flex md:hidden items-center justify-between px-4 py-2 bg-[#2c2c2c] border-b border-white/10 shrink-0 z-20">
+        <header class="flex md:hidden items-center justify-between px-3.5 py-2.5 bg-[#1e1e1e] border-b border-white/10 shrink-0 z-20">
           <div class="flex items-center gap-2">
             <div class="w-6 h-6 rounded-md bg-[#60cdff]/15 flex items-center justify-center text-[#60cdff]">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -132,11 +133,16 @@ export class AppUI {
             </div>
             <span class="text-xs font-bold tracking-wider uppercase text-white">UploadPulse</span>
           </div>
-          <span class="text-[9px] px-2 py-0.5 rounded bg-[#60cdff]/15 text-[#60cdff] border border-[#60cdff]/30 font-mono font-medium">v1.0</span>
+          <div class="flex items-center gap-1.5">
+            <span class="text-[9px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 font-mono font-medium flex items-center gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span>LIVE</span>
+            </span>
+          </div>
         </header>
 
         <!-- Sidebar Navigation (Desktop) / Bottom Tab Bar (Mobile Android) -->
-        <aside id="app-sidebar" class="sidebar-panel flex flex-row md:flex-col justify-between items-center md:items-stretch p-1.5 md:p-3 shrink-0 order-2 md:order-1 z-30">
+        <aside id="app-sidebar" class="sidebar-panel flex flex-row md:flex-col justify-between items-center md:items-stretch p-1 md:p-3 shrink-0 order-2 md:order-1 z-30">
           <div class="hidden md:block">
             <!-- Sidebar Title Bar -->
             <div class="h-10 flex items-center gap-2.5 px-3 mb-3 border-b border-white/5">
@@ -146,7 +152,7 @@ export class AppUI {
                 </svg>
               </div>
               <span class="text-xs font-semibold tracking-wider uppercase text-white/90">UploadPulse</span>
-              <span class="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-[#a0a0a0] border border-white/10 font-mono">Win & Android</span>
+              <span class="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-[#a0a0a0] border border-white/10 font-mono">${isWails ? 'Windows' : 'Android'}</span>
             </div>
           </div>
 
@@ -240,19 +246,19 @@ export class AppUI {
     const currentMode = this.settings.network.testMode || 'both';
 
     viewport.innerHTML = `
-      <div class="max-w-4xl mx-auto w-full flex flex-col items-center justify-center space-y-6 my-auto">
+      <div class="max-w-4xl mx-auto w-full flex flex-col items-center justify-center space-y-4 sm:space-y-6 my-auto">
         
         <!-- Top Mode Selector Segmented Control -->
-        <div class="flex items-center p-1 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs gap-1 shadow-inner">
-          <button id="btn-mode-both" class="px-4 py-2 rounded-lg font-medium transition flex items-center gap-2 ${
+        <div class="flex items-center p-1 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs gap-1 shadow-inner max-w-full overflow-x-auto">
+          <button id="btn-mode-both" class="px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg font-medium transition flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
             currentMode === 'both'
               ? 'bg-[#60cdff] text-black shadow font-semibold'
               : 'text-[#a0a0a0] hover:text-white hover:bg-white/5'
           }">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 16V4m0 0L3 8m4-4l4 4m6 4v12m0 0l4-4m-4 4l-4-4"/></svg>
-            <span>Download & Upload</span>
+            <span>Both</span><span class="hidden sm:inline">(Down + Up)</span>
           </button>
-          <button id="btn-mode-download" class="px-4 py-2 rounded-lg font-medium transition flex items-center gap-2 ${
+          <button id="btn-mode-download" class="px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg font-medium transition flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
             currentMode === 'download'
               ? 'bg-[#60cdff] text-black shadow font-semibold'
               : 'text-[#a0a0a0] hover:text-white hover:bg-white/5'
@@ -260,7 +266,7 @@ export class AppUI {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v16m0 0l-6-6m6 6l6-6"/></svg>
             <span>Download</span>
           </button>
-          <button id="btn-mode-upload" class="px-4 py-2 rounded-lg font-medium transition flex items-center gap-2 ${
+          <button id="btn-mode-upload" class="px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg font-medium transition flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
             currentMode === 'upload'
               ? 'bg-[#60cdff] text-black shadow font-semibold'
               : 'text-[#a0a0a0] hover:text-white hover:bg-white/5'
@@ -271,7 +277,7 @@ export class AppUI {
         </div>
 
         <!-- Status Badge -->
-        <div id="status-badge" class="status-badge tracking-wider uppercase">
+        <div id="status-badge" class="status-badge tracking-wider uppercase text-[10px] sm:text-xs py-1 px-3 sm:py-1.5 sm:px-4">
           ${this.currentState.message ? this.currentState.message.toUpperCase() : this.t('state_idle').toUpperCase()}
         </div>
 
@@ -285,7 +291,7 @@ export class AppUI {
 
           <!-- Gauge Inner Values -->
           <div class="flex flex-col items-center justify-center z-10 text-center px-4">
-            <div id="meter-phase-label" class="text-[11px] font-bold uppercase tracking-widest text-[#60cdff] mb-0.5">
+            <div id="meter-phase-label" class="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-[#60cdff] mb-0.5">
               ${
                 this.currentState.state === 'downloading'
                   ? 'DOWNLOADING'
@@ -306,7 +312,7 @@ export class AppUI {
         </div>
 
         <!-- Action Buttons -->
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2 sm:gap-3">
           <button id="btn-start-stop" class="theme-btn-primary ${this.isTesting ? 'theme-btn-stop' : ''}">
             <svg id="btn-action-icon" width="16" height="16" fill="currentColor" viewBox="0 0 20 20">
               ${
@@ -325,16 +331,16 @@ export class AppUI {
         </div>
 
         <!-- Metric Group: 4 Clean Geometric Cards (Download, Upload, Latency, Jitter) -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full max-w-2xl">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 w-full max-w-2xl">
           <!-- Download Card -->
-          <div class="metric-card flex flex-col justify-between">
+          <div class="metric-card flex flex-col justify-between p-2.5 sm:p-3.5">
             <div class="flex items-center justify-between text-xs text-[#a0a0a0]">
               <span class="font-medium flex items-center gap-1.5">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" class="text-amber-400"><path d="M12 4v16m0 0l-6-6m6 6l6-6"/></svg>
                 ${this.t('meter_download')}
               </span>
             </div>
-            <div id="meter-download-speed" class="metric-value text-amber-400 text-lg font-mono my-1">
+            <div id="meter-download-speed" class="metric-value text-amber-400 text-base sm:text-lg font-mono my-0.5 sm:my-1">
               -- ${this.settings.display.speedUnit}
             </div>
             <div id="meter-download-peak" class="text-[10px] text-[#a0a0a0] font-mono">
@@ -343,14 +349,14 @@ export class AppUI {
           </div>
 
           <!-- Upload Card -->
-          <div class="metric-card flex flex-col justify-between">
+          <div class="metric-card flex flex-col justify-between p-2.5 sm:p-3.5">
             <div class="flex items-center justify-between text-xs text-[#a0a0a0]">
               <span class="font-medium flex items-center gap-1.5">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" class="text-[#60cdff]"><path d="M12 20V4m0 0l-6 6m6-6l6 6"/></svg>
                 ${this.t('meter_upload')}
               </span>
             </div>
-            <div id="meter-upload-speed" class="metric-value text-[#60cdff] text-lg font-mono my-1">
+            <div id="meter-upload-speed" class="metric-value text-[#60cdff] text-base sm:text-lg font-mono my-0.5 sm:my-1">
               -- ${this.settings.display.speedUnit}
             </div>
             <div id="meter-upload-peak" class="text-[10px] text-[#a0a0a0] font-mono">
@@ -359,14 +365,14 @@ export class AppUI {
           </div>
 
           <!-- Latency Card -->
-          <div class="metric-card flex flex-col justify-between">
+          <div class="metric-card flex flex-col justify-between p-2.5 sm:p-3.5">
             <div class="flex items-center justify-between text-xs text-[#a0a0a0]">
               <span class="font-medium flex items-center gap-1.5">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" class="text-emerald-400"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 ${this.t('meter_latency')}
               </span>
             </div>
-            <div id="meter-latency-val" class="metric-value text-emerald-400 text-lg font-mono my-1">
+            <div id="meter-latency-val" class="metric-value text-emerald-400 text-base sm:text-lg font-mono my-0.5 sm:my-1">
               ${this.currentMetrics.latencyMs ? this.currentMetrics.latencyMs + ' ms' : '-- ms'}
             </div>
             <div id="meter-latency-range" class="text-[10px] text-[#a0a0a0] font-mono">
@@ -375,14 +381,14 @@ export class AppUI {
           </div>
 
           <!-- Jitter Card -->
-          <div class="metric-card flex flex-col justify-between">
+          <div class="metric-card flex flex-col justify-between p-2.5 sm:p-3.5">
             <div class="flex items-center justify-between text-xs text-[#a0a0a0]">
               <span class="font-medium flex items-center gap-1.5">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" class="text-purple-400"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
                 ${this.t('meter_jitter')}
               </span>
             </div>
-            <div id="meter-jitter-val" class="metric-value text-purple-400 text-lg font-mono my-1">
+            <div id="meter-jitter-val" class="metric-value text-purple-400 text-base sm:text-lg font-mono my-0.5 sm:my-1">
               ${this.currentMetrics.jitterMs !== undefined ? this.currentMetrics.jitterMs + ' ms' : '-- ms'}
             </div>
             <div id="meter-jitter-quality" class="text-[10px] text-purple-300/80 font-mono">
@@ -392,22 +398,22 @@ export class AppUI {
         </div>
 
         <!-- Transferred Volume & Flow Summary Card -->
-        <div class="w-full max-w-2xl grid grid-cols-3 gap-2 px-4 py-3 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs">
+        <div class="w-full max-w-2xl grid grid-cols-3 gap-1 sm:gap-2 px-3 sm:px-4 py-2 sm:py-3 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs">
           <div class="text-center">
             <div class="text-[10px] text-[#a0a0a0] uppercase tracking-wider">Downloaded</div>
-            <div id="meter-data-down" class="font-mono text-white/90 font-medium mt-0.5">
+            <div id="meter-data-down" class="font-mono text-white/90 font-medium mt-0.5 text-xs sm:text-sm">
               ${this.formatBytes(this.currentMetrics.downloadBytes || 0)}
             </div>
           </div>
           <div class="text-center border-x border-white/10">
             <div class="text-[10px] text-[#a0a0a0] uppercase tracking-wider">Uploaded</div>
-            <div id="meter-data-up" class="font-mono text-white/90 font-medium mt-0.5">
+            <div id="meter-data-up" class="font-mono text-white/90 font-medium mt-0.5 text-xs sm:text-sm">
               ${this.formatBytes(this.currentMetrics.uploadBytes || this.currentMetrics.serverConfirmedBytes || 0)}
             </div>
           </div>
           <div class="text-center">
             <div class="text-[10px] text-[#a0a0a0] uppercase tracking-wider">Total Volume</div>
-            <div id="meter-data-total" class="font-mono text-white/90 font-medium mt-0.5">
+            <div id="meter-data-total" class="font-mono text-white/90 font-medium mt-0.5 text-xs sm:text-sm">
               ${this.formatBytes(
                 (this.currentMetrics.downloadBytes || 0) +
                   (this.currentMetrics.uploadBytes || this.currentMetrics.serverConfirmedBytes || 0)
@@ -1180,7 +1186,10 @@ export class AppUI {
             <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-[#a0a0a0]">Advanced Network</span>
           </div>
 
-          <div class="grid grid-cols-2 gap-4">
+          ${
+            isWails
+              ? `
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label class="block text-xs font-medium text-[#a0a0a0] mb-1">Source Interface IP (Local Binding)</label>
               <input id="cfg-source-ip" type="text"
@@ -1197,11 +1206,22 @@ export class AppUI {
                 class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white font-mono placeholder:text-neutral-600" />
             </div>
           </div>
+          `
+              : `
+          <div>
+            <label class="block text-xs font-medium text-[#a0a0a0] mb-1">Custom DNS Resolver Server</label>
+            <input id="cfg-custom-dns" type="text"
+              placeholder="e.g. 1.1.1.1:53, 8.8.8.8:53"
+              value="${this.settings.network.customDns || ''}"
+              class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white font-mono placeholder:text-neutral-600" />
+          </div>
+          `
+          }
 
           <div>
             <label class="block text-xs font-medium text-[#a0a0a0] mb-1">Custom HTTP User-Agent Header</label>
             <input id="cfg-user-agent" type="text"
-              placeholder="e.g. UploadPulse/2.0.0 (Windows 11 x64)"
+              placeholder="${isWails ? 'e.g. UploadPulse/2.0.0 (Windows 11 x64)' : 'e.g. UploadPulse/2.0.0 (Android Mobile)'}"
               value="${this.settings.network.userAgent || ''}"
               class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white font-mono placeholder:text-neutral-600" />
           </div>
@@ -1344,9 +1364,9 @@ export class AppUI {
             <div>
               <label class="block text-xs font-medium text-[#a0a0a0] mb-1">Visual Theme</label>
               <select id="cfg-theme" class="theme-input w-full px-3 py-1.5 text-xs bg-[#1c1c1c] text-white">
-                <option value="dark" ${(this.settings.display.theme || 'dark') === 'dark' ? 'selected' : ''}>Windows 11 Dark (Mica)</option>
-                <option value="light" ${this.settings.display.theme === 'light' ? 'selected' : ''}>Windows 11 Light (Fluent)</option>
-                <option value="oled" ${this.settings.display.theme === 'oled' ? 'selected' : ''}>OLED High-Contrast Black</option>
+                <option value="dark" ${(this.settings.display.theme || 'dark') === 'dark' ? 'selected' : ''}>${isWails ? 'Windows 11 Dark (Mica)' : 'Dark Theme (AMOLED / Slate)'}</option>
+                <option value="light" ${this.settings.display.theme === 'light' ? 'selected' : ''}>${isWails ? 'Windows 11 Light (Fluent)' : 'Light Theme'}</option>
+                <option value="oled" ${this.settings.display.theme === 'oled' ? 'selected' : ''}>${isWails ? 'OLED High-Contrast Black' : 'OLED Pure Black'}</option>
                 <option value="system" ${this.settings.display.theme === 'system' ? 'selected' : ''}>System Default</option>
               </select>
             </div>
@@ -1371,6 +1391,9 @@ export class AppUI {
               <input id="cfg-show-chart" type="checkbox" class="w-4 h-4 rounded accent-[#60cdff]" ${this.settings.display.showLiveChart ? 'checked' : ''}/>
             </div>
 
+            ${
+              isWails
+                ? `
             <div class="flex items-center justify-between">
               <div>
                 <div class="text-xs font-medium text-white">Windows 11 Mica Glass Effect</div>
@@ -1378,11 +1401,14 @@ export class AppUI {
               </div>
               <input id="cfg-enable-mica" type="checkbox" class="w-4 h-4 rounded accent-[#60cdff]" ${(this.settings.display.enableMica ?? true) ? 'checked' : ''}/>
             </div>
+            `
+                : ''
+            }
 
             <div class="flex items-center justify-between">
               <div>
-                <div class="text-xs font-medium text-white">Desktop Notification on Test Completion</div>
-                <div class="text-[11px] text-[#a0a0a0]">Triggers a native Windows 11 toast notification with final results.</div>
+                <div class="text-xs font-medium text-white">${isWails ? 'Desktop Notification on Test Completion' : 'Completion Alert Notification'}</div>
+                <div class="text-[11px] text-[#a0a0a0]">${isWails ? 'Triggers a native Windows 11 toast notification with final results.' : 'Displays completion notification with final benchmark results.'}</div>
               </div>
               <input id="cfg-completion-notification" type="checkbox" class="w-4 h-4 rounded accent-[#60cdff]" ${(this.settings.display.completionNotification ?? true) ? 'checked' : ''}/>
             </div>
@@ -1543,11 +1569,12 @@ export class AppUI {
         const theme = (document.getElementById('cfg-theme') as HTMLSelectElement).value as any;
         const chartPoints = parseInt((document.getElementById('cfg-chart-points') as HTMLSelectElement).value, 10);
         const showChart = (document.getElementById('cfg-show-chart') as HTMLInputElement).checked;
-        const enableMica = (document.getElementById('cfg-enable-mica') as HTMLInputElement).checked;
-        const compNotif = (document.getElementById('cfg-completion-notification') as HTMLInputElement).checked;
-        const compSound = (document.getElementById('cfg-completion-sound') as HTMLInputElement).checked;
-        const autoStart = (document.getElementById('cfg-auto-start') as HTMLInputElement).checked;
-        const mask = (document.getElementById('cfg-mask-ip') as HTMLInputElement).checked;
+        const micaEl = document.getElementById('cfg-enable-mica') as HTMLInputElement | null;
+        const enableMica = micaEl ? micaEl.checked : (this.settings.display.enableMica ?? false);
+        const compNotif = (document.getElementById('cfg-completion-notification') as HTMLInputElement)?.checked ?? true;
+        const compSound = (document.getElementById('cfg-completion-sound') as HTMLInputElement)?.checked ?? true;
+        const autoStart = (document.getElementById('cfg-auto-start') as HTMLInputElement)?.checked ?? false;
+        const mask = (document.getElementById('cfg-mask-ip') as HTMLInputElement)?.checked ?? false;
 
         const maxRecs = parseInt((document.getElementById('cfg-max-records') as HTMLSelectElement).value, 10);
         const retDays = parseInt((document.getElementById('cfg-retention-days') as HTMLSelectElement).value, 10);

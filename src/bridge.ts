@@ -1,40 +1,8 @@
 import { AppSettings, HistoryRecord, LiveMetrics, LocaleData, ProxyTestResult, ServerInfo, StateInfo } from './types';
+import { discoverRealServers, GLOBAL_SERVERS, pingTargetServer, RealSpeedTestEngine } from './speedtest';
+import { isAndroid, isWails } from './platform';
 
-// Declare Wails window globals
-declare global {
-  interface Window {
-    go?: {
-      main: {
-        App: {
-          GetSettings(): Promise<AppSettings>;
-          UpdateSettings(settings: AppSettings): Promise<AppSettings>;
-          GetHistory(): Promise<HistoryRecord[]>;
-          QueryHistory(search: string, sortBy: string, desc: boolean): Promise<HistoryRecord[]>;
-          DeleteHistoryRecord(id: string): Promise<void>;
-          ClearHistory(): Promise<void>;
-          ExportCSV(): Promise<string>;
-          ExportJSON(): Promise<string>;
-          CopySummary(recordID: string, includeServer: boolean): Promise<string>;
-          DiscoverServers(): Promise<ServerInfo[]>;
-          PingServer(serverID: string): Promise<number>;
-          ValidateCustomServer(customURL: string): Promise<ServerInfo>;
-          StartTest(): Promise<any>;
-          StartDownloadTest(): Promise<any>;
-          StartUploadTest(): Promise<any>;
-          CancelTest(): Promise<void>;
-          GetLocale(lang: string): Promise<LocaleData>;
-          TestProxyConnection(proxyURL: string): Promise<ProxyTestResult>;
-        };
-      };
-    };
-    runtime?: {
-      EventsOn(eventName: string, callback: (...args: any[]) => void): void;
-      EventsEmit(eventName: string, ...args: any[]): void;
-    };
-  }
-}
-
-// English and Persian locales for immediate availability
+export { isAndroid, isWails };
 export const ENGLISH_LOCALE: LocaleData = {
   languageCode: 'en',
   direction: 'ltr',
@@ -186,10 +154,11 @@ let previewHistory: HistoryRecord[] = (() => {
   return [];
 })();
 
-let simulatedTestInterval: any = null;
 const eventListeners: Record<string, ((...args: any[]) => void)[]> = {};
 
-export const isWails = !!(window.go && window.go.main && window.go.main.App);
+const realSpeedEngine = new RealSpeedTestEngine((event, ...args) => {
+  Bridge.emit(event, ...args);
+});
 
 export const Bridge = {
   async getSettings(): Promise<AppSettings> {
@@ -326,80 +295,37 @@ export const Bridge = {
     if (isWails) {
       return window.go!.main.App.DiscoverServers();
     }
-    return [
-      {
-        id: 'auto-1',
-        name: 'Frankfurt Optimal Uplink',
-        sponsor: 'CoreBackbone GmbH',
-        country: 'Germany',
-        city: 'Frankfurt',
-        distance: 24,
-        latencyMs: 14,
-        url: 'https://fra1.speedtest.net/speedtest/upload.php',
-        host: 'fra1.speedtest.net',
-        available: true,
-      },
-      {
-        id: 'auto-2',
-        name: 'London Cloud Telemetry',
-        sponsor: 'Vodafone UK',
-        country: 'United Kingdom',
-        city: 'London',
-        distance: 280,
-        latencyMs: 22,
-        url: 'https://lon1.speedtest.net/speedtest/upload.php',
-        host: 'lon1.speedtest.net',
-        available: true,
-      },
-      {
-        id: 'auto-3',
-        name: 'Amsterdam Fiber PoP',
-        sponsor: 'KPN B.V.',
-        country: 'Netherlands',
-        city: 'Amsterdam',
-        distance: 190,
-        latencyMs: 18,
-        url: 'https://ams1.speedtest.net/speedtest/upload.php',
-        host: 'ams1.speedtest.net',
-        available: true,
-      },
-      {
-        id: 'auto-4',
-        name: 'Tehran Uplink Exchange',
-        sponsor: 'MCI Data Hub',
-        country: 'Iran',
-        city: 'Tehran',
-        distance: 3800,
-        latencyMs: 48,
-        url: 'https://thr1.speedtest.ir/speedtest/upload.php',
-        host: 'thr1.speedtest.ir',
-        available: true,
-      },
-    ];
+    return discoverRealServers();
   },
 
   async pingServer(serverID: string): Promise<number> {
     if (isWails) {
       return window.go!.main.App.PingServer(serverID);
     }
-    return Math.floor(12 + Math.random() * 20);
+    const found = GLOBAL_SERVERS.find((s) => s.id === serverID);
+    return pingTargetServer(found ? found.url : undefined);
   },
 
   async validateCustomServer(customURL: string): Promise<ServerInfo> {
     if (isWails) {
       return window.go!.main.App.ValidateCustomServer(customURL);
     }
+    const rtt = await pingTargetServer(customURL);
+    let host = customURL;
+    try {
+      host = new URL(customURL).host;
+    } catch (e) {}
     return {
       id: 'custom-1',
-      name: 'Custom Verified Upload Server',
-      sponsor: 'Private Upload Host',
-      country: 'Dedicated Target',
-      city: 'Custom Endpoint',
+      name: 'Custom Target Server',
+      sponsor: 'Private Server Endpoint',
+      country: 'Direct Route',
+      city: 'Custom Target',
       distance: 0,
-      latencyMs: 16,
+      latencyMs: rtt,
       url: customURL,
-      host: new URL(customURL).host,
-      available: true,
+      host,
+      available: rtt < 990,
     };
   },
 
@@ -407,210 +333,43 @@ export const Bridge = {
     if (isWails) {
       return window.go!.main.App.StartTest();
     }
-    return this.runSimulatedTest(previewSettings.network.testMode || 'both');
+    return this.runRealTest(previewSettings.network.testMode || 'both');
   },
 
   async startDownloadTest(): Promise<any> {
     if (isWails && window.go?.main?.App?.StartDownloadTest) {
       return window.go.main.App.StartDownloadTest();
     }
-    return this.runSimulatedTest('download');
+    return this.runRealTest('download');
   },
 
   async startUploadTest(): Promise<any> {
     if (isWails && window.go?.main?.App?.StartUploadTest) {
       return window.go.main.App.StartUploadTest();
     }
-    return this.runSimulatedTest('upload');
+    return this.runRealTest('upload');
   },
 
-  async runSimulatedTest(mode: 'both' | 'download' | 'upload'): Promise<any> {
-    if (simulatedTestInterval) clearInterval(simulatedTestInterval);
+  async runRealTest(mode: 'both' | 'download' | 'upload'): Promise<any> {
+    const selectedServer = previewSettings.network.selectedServerID
+      ? GLOBAL_SERVERS.find((s) => s.id === previewSettings.network.selectedServerID)
+      : undefined;
 
-    const sessionID = 'sim-' + Date.now();
-    Bridge.emit('test:state', {
-      state: 'discovering_servers',
-      sessionID,
-      progressPercent: 8,
-      message: 'Discovering optimal speedtest server...',
-    } as StateInfo);
-
-    await new Promise((r) => setTimeout(r, 450));
-
-    Bridge.emit('test:state', {
-      state: 'measuring_latency',
-      sessionID,
-      progressPercent: 18,
-      message: 'Benchmarking latency & jitter (10 ping samples)...',
-    } as StateInfo);
-
-    const measuredLatency = 14.5;
-    const measuredJitter = 2.1;
-
-    await new Promise((r) => setTimeout(r, 450));
-
-    const totalDuration = Math.max(5, previewSettings.network.durationSeconds || 15);
-    const hasDownload = mode === 'both' || mode === 'download';
-    const hasUpload = mode === 'both' || mode === 'upload';
-    const phaseDuration = mode === 'both' ? totalDuration / 2 : totalDuration;
-
-    let currentPhase: 'download' | 'upload' = hasDownload ? 'download' : 'upload';
-    let phaseElapsed = 0;
-    let totalElapsed = 0;
-
-    let downTransferred = 0;
-    let upTransferred = 0;
-    let downPeak = 0;
-    let upPeak = 0;
-
-    const baseDownSpeed = 118000000; // ~118 Mbps
-    const baseUpSpeed = 65000000;    // ~65 Mbps
-
-    Bridge.emit('test:state', {
-      state: currentPhase === 'download' ? 'downloading' : 'uploading',
-      sessionID,
-      progressPercent: 20,
-      message: currentPhase === 'download' ? 'Testing download speed...' : 'Testing upload speed...',
-    } as StateInfo);
-
-    simulatedTestInterval = setInterval(() => {
-      const step = 0.25;
-      phaseElapsed += step;
-      totalElapsed += step;
-
-      const noise = Math.sin(phaseElapsed * 2) * 0.12 + (Math.random() - 0.5) * 0.08;
-      let activeSpeed = 0;
-
-      if (currentPhase === 'download') {
-        activeSpeed = Math.max(20000000, baseDownSpeed * (1 + noise));
-        if (activeSpeed > downPeak) downPeak = activeSpeed;
-        downTransferred += (activeSpeed * step) / 8;
-      } else {
-        activeSpeed = Math.max(15000000, baseUpSpeed * (1 + noise));
-        if (activeSpeed > upPeak) upPeak = activeSpeed;
-        upTransferred += (activeSpeed * step) / 8;
-      }
-
-      const totalTransferred = downTransferred + upTransferred;
-      const progress = Math.min(95, 20 + (totalElapsed / totalDuration) * 75);
-
-      Bridge.emit('test:metrics', {
-        sessionID,
-        testMode: mode,
-        phase: currentPhase,
-        instantaneousSpeedBps: activeSpeed,
-        peakSpeedBps: currentPhase === 'download' ? downPeak : upPeak,
-        averageSpeedBps: currentPhase === 'download'
-          ? (downTransferred * 8) / phaseElapsed
-          : (upTransferred * 8) / phaseElapsed,
-        transferredBytes: Math.floor(totalTransferred),
-        downloadBytes: Math.floor(downTransferred),
-        uploadBytes: Math.floor(upTransferred),
-        serverConfirmedBytes: Math.floor(totalTransferred * 0.99),
-        serverConfirmedRatio: 0.99,
-        elapsedSeconds: totalElapsed,
-        estimatedRemainingSeconds: Math.max(0, totalDuration - totalElapsed),
-        activeWorkers: previewSettings.network.workerCount || 8,
-        latencyMs: measuredLatency,
-        jitterMs: measuredJitter,
-        minLatencyMs: 13.1,
-        maxLatencyMs: 18.2,
-      } as LiveMetrics);
-
-      Bridge.emit('test:state', {
-        state: currentPhase === 'download' ? 'downloading' : 'uploading',
-        sessionID,
-        progressPercent: Math.floor(progress),
-        message: `${currentPhase === 'download' ? 'Downloading' : 'Uploading'}: ${(activeSpeed / 1000000).toFixed(1)} Mbps`,
-      } as StateInfo);
-
-      // Phase Transition
-      if (currentPhase === 'download' && hasUpload && phaseElapsed >= phaseDuration) {
-        currentPhase = 'upload';
-        phaseElapsed = 0;
-        Bridge.emit('test:state', {
-          state: 'uploading',
-          sessionID,
-          progressPercent: Math.floor(progress),
-          message: 'Swapping to upload phase...',
-        } as StateInfo);
-        return;
-      }
-
-      if (totalElapsed >= totalDuration) {
-        clearInterval(simulatedTestInterval);
-        simulatedTestInterval = null;
-
-        const avgDown = hasDownload ? (downTransferred * 8) / (hasUpload ? phaseDuration : totalDuration) : 0;
-        const avgUp = hasUpload ? (upTransferred * 8) / (hasDownload ? phaseDuration : totalDuration) : 0;
-
-        const record: HistoryRecord = {
-          id: sessionID,
-          timestamp: new Date().toISOString(),
-          success: true,
-          testMode: mode,
-          avgDownloadSpeedBps: avgDown,
-          peakDownloadSpeedBps: downPeak,
-          avgUploadSpeedBps: avgUp,
-          peakUploadSpeedBps: upPeak,
-          finalStableSpeedBps: activeSpeed,
-          durationSeconds: totalDuration,
-          downloadBytes: Math.floor(downTransferred),
-          uploadBytes: Math.floor(upTransferred),
-          transferredBytes: Math.floor(totalTransferred),
-          serverConfirmedBytes: Math.floor(totalTransferred * 0.99),
-          serverConfirmedRatio: 0.99,
-          latencyMs: measuredLatency,
-          jitterMs: measuredJitter,
-          minLatencyMs: 13.1,
-          maxLatencyMs: 18.2,
-          clientIP: '192.168.1.105',
-          isp: 'Gigabit Fiber Uplink',
-          server: {
-            id: 'auto-1',
-            name: 'Frankfurt Optimal Cloud Hub',
-            sponsor: 'CoreBackbone Global',
-            country: 'Germany',
-            city: 'Frankfurt',
-            distance: 24,
-            latency: measuredLatency,
-            jitterMs: measuredJitter,
-            minLatency: 13.1,
-            maxLatency: 18.2,
-            host: 'fra1.speedtest.net',
-          },
-          effectiveSettings: { ...previewSettings.network, testMode: mode },
-        };
-
-        previewHistory.unshift(record);
+    const record = await realSpeedEngine.runTest(mode, previewSettings, selectedServer);
+    if (record) {
+      previewHistory.unshift(record);
+      try {
         localStorage.setItem('uploadpulse_history', JSON.stringify(previewHistory));
-
-        Bridge.emit('test:state', {
-          state: 'completed',
-          sessionID,
-          progressPercent: 100,
-          message: `Speed test (${mode.toUpperCase()}) completed successfully.`,
-        } as StateInfo);
-      }
-    }, 250);
-
-    return { sessionID };
+      } catch (e) {}
+    }
+    return record;
   },
 
   async cancelTest(): Promise<void> {
     if (isWails) {
       return window.go!.main.App.CancelTest();
     }
-    if (simulatedTestInterval) {
-      clearInterval(simulatedTestInterval);
-      simulatedTestInterval = null;
-    }
-    Bridge.emit('test:state', {
-      state: 'cancelled',
-      sessionID: '',
-      progressPercent: 0,
-      message: 'Test cancelled by user.',
-    } as StateInfo);
+    realSpeedEngine.cancelTest();
   },
 
   async getLocale(_lang?: string): Promise<LocaleData> {

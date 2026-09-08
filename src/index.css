@@ -167,6 +167,14 @@ body {
   background: radial-gradient(circle, rgba(50, 50, 50, 0.4) 0%, rgba(32, 32, 32, 0.9) 75%);
 }
 
+@media (max-width: 768px) {
+  .gauge-outer {
+    width: 220px !important;
+    height: 220px !important;
+    border-width: 5px !important;
+  }
+}
+
 .speed-value {
   font-size: 64px;
   font-weight: 600;
@@ -176,11 +184,24 @@ body {
   letter-spacing: -0.02em;
 }
 
+@media (max-width: 768px) {
+  .speed-value {
+    font-size: 40px !important;
+  }
+}
+
 .speed-unit {
   color: var(--text-sub);
   font-size: 18px;
   margin-top: 6px;
   font-weight: 500;
+}
+
+@media (max-width: 768px) {
+  .speed-unit {
+    font-size: 13px !important;
+    margin-top: 2px !important;
+  }
 }
 
 /* Button & Controls */

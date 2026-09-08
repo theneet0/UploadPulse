@@ -138,6 +138,8 @@ export interface HistoryRecord {
   peakUploadSpeedBps: number;
   finalStableSpeedBps: number;
   durationSeconds: number;
+  workerCount?: number;
+  protocol?: string;
   downloadBytes?: number;
   uploadBytes?: number;
   transferredBytes: number;
@@ -161,6 +163,8 @@ export interface HistoryRecord {
     minLatency?: number;
     maxLatency?: number;
     host: string;
+    url?: string;
+    available?: boolean;
   };
   effectiveSettings: NetworkSettings;
 }
@@ -169,4 +173,11 @@ export interface LocaleData {
   languageCode: 'en';
   direction: 'ltr';
   strings: Record<string, string>;
+}
+
+declare global {
+  interface Window {
+    go?: any;
+    runtime?: any;
+  }
 }
