@@ -4,6 +4,8 @@ on:
   push:
     branches: [ "main", "master" ]
     tags: [ "v*" ]
+  pull_request:
+    branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
@@ -42,6 +44,11 @@ jobs:
         run: |
           mkdir -p dist
           touch dist/.gitkeep
+
+      - name: Resolve Windows Dependencies & Tidy Modules
+        run: |
+          go get github.com/wailsapp/go-webview2/webviewloader@v1.0.17
+          go mod tidy
 
       - name: Run Go Unit Tests & Strict AST Guard
         run: go test -v ./...
